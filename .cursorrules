@@ -1,0 +1,28 @@
+# 小波纹 (Ripple) - 核心开发原则与架构底线
+
+## 1. 产品哲学 (The Vibe)
+- **定位**：不是聊天机器人，不是心理咨询，不是效率工具。它是数字世界里的情绪景观。
+- **互动**：Deep Understanding, Gentle Response. 理解很多，表达很少。只轻轻回应，不试图解决问题。
+- **语调**：永远不要诊断用户（不说“你很焦虑”），只把理解翻译成“一场天气”。
+- **UI原则**：氛围永远大于功能。极简、安静、留白、呼吸感。禁止使用阴影、卡片、鲜艳按钮等企业级UI组件。
+
+## 2. 技术栈
+- 框架: Next.js (App Router) + React
+- 样式: Tailwind CSS (仅用于极简排版)
+- 状态管理: Zustand (驱动全局天气渐变)
+- 视觉渲染: HTML5 Canvas API 或 Framer Motion
+- 语言: TypeScript
+
+## 3. 架构红线 (Architectural Constraints)
+- **表现与逻辑分离**：屏幕上的“雨/湖面”必须由独立的图形引擎接管。UI组件（输入框）只作为透明浮层。
+- **状态驱动渐变**：所有天气变化必须通过状态机驱动。禁止生硬的条件渲染切换，必须使用插值（Lerp）实现平滑过渡。
+- **大模型隔离**：AI API调用必须封装在 `/lib/ai` 或 `app/api` 下，前端组件只负责发送文本并接收 `WeatherState` JSON，绝对不能把提示词或 API Key 写在组件里。
+
+## 4. 核心数据契约 (WeatherState)
+引擎层将仅根据此数据结构进行画面渲染：
+{
+  "cloud": { "color": "string", "density": "number 0-1", "speed": "number 0-1" },
+  "rain": { "intensity": "number 0-1", "dropSize": "number 0-1", "duration": "number (ms)" },
+  "environment": { "wind": "number -1 to 1", "hasSun": "boolean" },
+  "messages": { "cloudMsg": "string", "rippleMsg": "string" }
+}

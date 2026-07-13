@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+}
+
+/* 天空与湖面的呢喃：极慢地浮现，绝不能像弹窗一样"跳出来"。 */
+@keyframes fade-in-slow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 命中真实波纹后浮现的短句：8 秒内向上漂浮 60px，前 1 秒淡入，中间 4 秒保持，后 3 秒极慢淡出。 */
+@keyframes ripple-float-up {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+  12.5% {
+    opacity: 0.9;
+    transform: translate(-50%, calc(-50% - 8px));
+  }
+  62.5% {
+    opacity: 0.9;
+    transform: translate(-50%, calc(-50% - 45px));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 60px));
+  }
+}
