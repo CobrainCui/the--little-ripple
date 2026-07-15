@@ -22,18 +22,18 @@ export default function ThoughtInput() {
     }
   }, [isCloudActive]);
 
-  const placeholder = isSending
-    ? "云在聚集..."
-    : isCloudActive
-      ? "我想要一场..."
-      : "今天，想落下一句话吗？";
+  const displayValue = isSending ? "云正在聚集..." : text;
+  const placeholder = isCloudActive ? "我想要一场..." : "今天，想落下一句话吗？";
 
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed || isSending) return;
 
+    const isModification = useWeatherStore.getState().isCloudActive;
     setIsSending(true);
-    setText("");
+    console.log("正在发送天气请求...", trimmed);
+
+    let succeeded = false;
 
     try {
       const response = await fetch("/api/weather", {
@@ -41,20 +41,45 @@ export default function ThoughtInput() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: trimmed }),
       });
-      const weather = await response.json();
-      setTargetWeather(weather);
+
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error("提交失败: 响应不是合法 JSON", parseError);
+        throw parseError;
+      }
+
+      if (!response.ok) {
+        const message =
+          data && typeof data === "object" && "error" in data
+            ? String((data as { error: unknown }).error)
+            : `请求失败 (${response.status})`;
+        throw new Error(message);
+      }
+
+      if (!data || typeof data !== "object" || !("weather" in data)) {
+        throw new Error("返回数据格式无效，缺少 weather 字段");
+      }
+
+      console.log("收到天气数据:", data);
+      setTargetWeather(data as Parameters<typeof setTargetWeather>[0], isModification);
       setCloudActive(false);
+      succeeded = true;
     } catch (error) {
-      console.error("[ThoughtInput] 这句话没能抵达天空：", error);
+      console.error("提交失败:", error);
     } finally {
       setIsSending(false);
+      if (succeeded) {
+        setText("");
+      }
     }
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
@@ -63,13 +88,15 @@ export default function ThoughtInput() {
       <input
         ref={inputRef}
         type="text"
-        value={text}
+        value={displayValue}
         disabled={isSending}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={`pointer-events-auto w-72 border-0 border-b border-white/20 bg-transparent px-1 py-2 text-center text-sm tracking-wide text-white/80 outline-none transition-colors duration-500 placeholder:text-white/40 focus:border-white/40 disabled:cursor-default ${
-          isSending ? "animate-pulse" : ""
+        className={`pointer-events-auto w-72 border-0 border-b border-white/20 bg-transparent px-1 py-2 text-center text-sm tracking-wide outline-none transition-colors duration-500 focus:border-white/40 disabled:cursor-default ${
+          isSending
+            ? "animate-pulse text-white/40 placeholder:text-white/40"
+            : "text-white/80 placeholder:text-white/40"
         }`}
       />
     </div>

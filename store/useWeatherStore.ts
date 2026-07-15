@@ -1,12 +1,10 @@
 import { create } from "zustand";
 import {
-  fileToBase64,
-  loadActiveBackgroundIndex,
-  loadBackgroundData,
-  loadBackgroundKeys,
-  saveBackgroundData,
-  setActiveBackgroundIndex,
-  toDisplayUrl,
+  addBackgroundToStorage,
+  getActiveBackgroundId,
+  getAllBackgrounds,
+  removeBackgroundFromStorage,
+  setActiveBackgroundId,
 } from "@/lib/backgroundStorage";
 
 export type WeatherType =
@@ -21,6 +19,11 @@ export type WeatherType =
   | "thunderstorm"
   | "clearing";
 
+export interface SavedBackground {
+  id: string;
+  dataUrl: string;
+}
+
 /**
  * 核心数据契约 (WeatherState) — MVP 0.2
  * 引擎层（Canvas）仅根据此结构渲染画面。
@@ -28,28 +31,25 @@ export type WeatherType =
 export interface WeatherState {
   weather: WeatherType;
   cloud: {
-    /** 纯 RGB 字符串，例如 "200, 210, 220"（不含 rgba() 或 #） */
     color: string;
-    density: number; // 0-1
-    speed: number; // 0-1
+    density: number;
+    speed: number;
   };
   rain: {
-    intensity: number; // 0-1
-    dropSize: number; // 0-1
-    duration: number; // ms
+    intensity: number;
+    dropSize: number;
+    duration: number;
   };
   environment: {
-    wind: number; // -1 to 1
+    wind: number;
     hasSun: boolean;
   };
   messages: {
     cloudMsg: string;
-    /** 波纹的话——每次点击波纹，随机浮起其中一句。 */
     rippleMsgs: string[];
   };
 }
 
-/** 默认状态：晴朗无雨，天空平静。 */
 export const defaultWeatherState: WeatherState = {
   weather: "clear",
   cloud: {
@@ -74,11 +74,9 @@ export const defaultWeatherState: WeatherState = {
 
 interface WeatherStore {
   targetWeather: WeatherState;
-  /** 当前显示的背景图 URL（由 IndexedDB 中的 base64 转换而来）。 */
   bgImage: string | null;
-  /** IndexedDB 中背景图的 key 列表。 */
-  backgrounds: string[];
-  activeBackgroundIndex: number;
+  savedBackgrounds: SavedBackground[];
+  activeBackgroundId: string | null;
 
   isCloudActive: boolean;
   lastRippleHit: { x: number; y: number; id: string } | null;
@@ -86,31 +84,32 @@ interface WeatherStore {
   hasStarted: boolean;
   cloudSpawnKey: number;
 
-  setTargetWeather: (target: Partial<WeatherState>) => void;
+  setTargetWeather: (target: Partial<WeatherState>, isModification?: boolean) => void;
   resetWeather: () => void;
   setCloudActive: (active: boolean) => void;
   triggerRippleMessage: (x: number, y: number) => void;
 
-  addBackground: (input: File | string) => Promise<void>;
-  switchBackground: (index: number) => Promise<void>;
-  hydrateBackgrounds: () => Promise<void>;
+  loadSavedBackgrounds: () => Promise<void>;
+  addBackground: (dataUrl: string) => Promise<void>;
+  removeBackground: (id: string) => Promise<void>;
+  setBgImage: (dataUrl: string | null) => Promise<void>;
 }
 
 export const useWeatherStore = create<WeatherStore>((set, get) => ({
   targetWeather: defaultWeatherState,
   bgImage: null,
-  backgrounds: [],
-  activeBackgroundIndex: 0,
+  savedBackgrounds: [],
+  activeBackgroundId: null,
   isCloudActive: false,
   lastRippleHit: null,
   hasStarted: false,
   cloudSpawnKey: 0,
 
-  setTargetWeather: (partial) => {
+  setTargetWeather: (partial, isModification = false) => {
     const prevTarget = get().targetWeather;
     set({
       hasStarted: true,
-      cloudSpawnKey: Date.now(),
+      cloudSpawnKey: isModification ? get().cloudSpawnKey : Date.now(),
       targetWeather: {
         weather: partial.weather ?? prevTarget.weather,
         cloud: { ...prevTarget.cloud, ...partial.cloud },
@@ -139,44 +138,60 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
     });
   },
 
-  addBackground: async (input) => {
-    const base64 = typeof input === "string" ? input : await fileToBase64(input);
-    await saveBackgroundData(base64);
-    const keys = await loadBackgroundKeys();
-    const activeIndex = keys.length - 1;
+  loadSavedBackgrounds: async () => {
+    const savedBackgrounds = await getAllBackgrounds();
+    const activeBackgroundId = await getActiveBackgroundId();
+    const active = savedBackgrounds.find((item) => item.id === activeBackgroundId);
+
     set({
-      backgrounds: keys,
-      activeBackgroundIndex: activeIndex,
-      bgImage: toDisplayUrl(base64),
+      savedBackgrounds,
+      activeBackgroundId,
+      bgImage: active?.dataUrl ?? null,
     });
   },
 
-  switchBackground: async (index) => {
-    const keys = get().backgrounds;
-    if (index < 0 || index >= keys.length) return;
+  addBackground: async (dataUrl) => {
+    const id = await addBackgroundToStorage(dataUrl);
+    await setActiveBackgroundId(id);
 
-    const data = await loadBackgroundData(keys[index]);
-    if (!data) return;
-
-    await setActiveBackgroundIndex(index);
+    const savedBackgrounds = await getAllBackgrounds();
     set({
-      activeBackgroundIndex: index,
-      bgImage: toDisplayUrl(data),
+      savedBackgrounds,
+      activeBackgroundId: id,
+      bgImage: dataUrl,
     });
   },
 
-  hydrateBackgrounds: async () => {
-    const keys = await loadBackgroundKeys();
-    if (keys.length === 0) return;
+  removeBackground: async (id) => {
+    const { activeBackgroundId } = get();
+    await removeBackgroundFromStorage(id);
 
-    const activeIndex = Math.min(await loadActiveBackgroundIndex(), keys.length - 1);
-    const data = await loadBackgroundData(keys[activeIndex]);
-    if (!data) return;
+    const savedBackgrounds = await getAllBackgrounds();
+    const wasActive = activeBackgroundId === id;
 
-    set({
-      backgrounds: keys,
-      activeBackgroundIndex: activeIndex,
-      bgImage: toDisplayUrl(data),
-    });
+    if (wasActive) {
+      await setActiveBackgroundId(null);
+      set({
+        savedBackgrounds,
+        activeBackgroundId: null,
+        bgImage: null,
+      });
+      return;
+    }
+
+    set({ savedBackgrounds });
+  },
+
+  setBgImage: async (dataUrl) => {
+    if (dataUrl === null) {
+      await setActiveBackgroundId(null);
+      set({ bgImage: null, activeBackgroundId: null });
+      return;
+    }
+
+    const match = get().savedBackgrounds.find((item) => item.dataUrl === dataUrl);
+    const activeId = match?.id ?? null;
+    await setActiveBackgroundId(activeId);
+    set({ bgImage: dataUrl, activeBackgroundId: activeId });
   },
 }));

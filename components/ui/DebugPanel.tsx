@@ -1,18 +1,80 @@
 "use client";
 
 import { useEffect, useState, type ChangeEvent } from "react";
-import { useWeatherStore } from "@/store/useWeatherStore";
+import { useWeatherStore, type WeatherState, type WeatherType } from "@/store/useWeatherStore";
 
-const PRESETS = [
+type WeatherPreset = {
+  label: string;
+  apply: () => Partial<WeatherState>;
+};
+
+function buildPreset(
+  weather: WeatherType,
+  overrides: {
+    intensity?: number;
+    cloudColor?: string;
+    wind?: number;
+  } = {},
+): Partial<WeatherState> {
+  const profiles: Record<
+    WeatherType,
+    {
+      density: number;
+      speed: number;
+      intensity: number;
+      dropSize: number;
+      wind: number;
+      hasSun: boolean;
+    }
+  > = {
+    clear: { density: 0.05, speed: 0.1, intensity: 0, dropSize: 0, wind: 0, hasSun: true },
+    cloudy: { density: 0.3, speed: 0.14, intensity: 0, dropSize: 0, wind: 0.08, hasSun: false },
+    overcast: { density: 0.45, speed: 0.12, intensity: 0, dropSize: 0, wind: 0.05, hasSun: false },
+    mist: { density: 0.35, speed: 0.08, intensity: 0, dropSize: 0, wind: 0, hasSun: false },
+    breeze: { density: 0.15, speed: 0.2, intensity: 0, dropSize: 0, wind: 0.35, hasSun: true },
+    drizzle: { density: 0.4, speed: 0.15, intensity: 0.12, dropSize: 0.2, wind: 0.05, hasSun: false },
+    light_rain: { density: 0.45, speed: 0.18, intensity: 0.25, dropSize: 0.3, wind: 0.1, hasSun: false },
+    showers: { density: 0.55, speed: 0.22, intensity: 0.45, dropSize: 0.45, wind: 0.25, hasSun: false },
+    thunderstorm: { density: 0.85, speed: 0.3, intensity: 0.75, dropSize: 0.65, wind: 0.65, hasSun: false },
+    clearing: { density: 0.22, speed: 0.16, intensity: 0.04, dropSize: 0.15, wind: 0.12, hasSun: true },
+  };
+
+  const profile = profiles[weather];
+  const intensity = overrides.intensity ?? profile.intensity;
+  const wind = overrides.wind ?? profile.wind;
+
+  return {
+    weather,
+    cloud: {
+      color: overrides.cloudColor ?? "200, 210, 220",
+      density: profile.density,
+      speed: profile.speed,
+    },
+    rain: {
+      intensity,
+      dropSize: profile.dropSize,
+      duration: 30000,
+    },
+    environment: {
+      wind,
+      hasSun: profile.hasSun,
+    },
+  };
+}
+
+const PRESETS: WeatherPreset[] = [
+  { label: "薄雾 (Mist)", apply: () => buildPreset("mist", { intensity: 0 }) },
   {
-    label: "一场暴雨",
-    apply: () => ({ rain: { intensity: 0.9 }, environment: { wind: 0.5 } }),
+    label: "暖阳 (Clear)",
+    apply: () => buildPreset("clear", { intensity: 0, cloudColor: "255, 230, 200" }),
   },
+  { label: "细雨 (Drizzle)", apply: () => buildPreset("drizzle", { intensity: 0.2 }) },
+  { label: "阵雨 (Showers)", apply: () => buildPreset("showers", { intensity: 0.6 }) },
   {
-    label: "绵绵细雨",
-    apply: () => ({ rain: { intensity: 0.2 }, environment: { wind: 0.1 } }),
+    label: "雷暴 (Thunderstorm)",
+    apply: () => buildPreset("thunderstorm", { intensity: 1.0, wind: 0.8 }),
   },
-] as const;
+];
 
 /**
  * 上帝模式调试面板。不是产品功能，是给开发者的旋钮——
@@ -40,11 +102,11 @@ export default function DebugPanel() {
   if (!visible) return null;
 
   const handleIntensityChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setTargetWeather({ rain: { intensity: Number(event.target.value) } });
+    setTargetWeather({ rain: { intensity: Number(event.target.value) } }, true);
   };
 
   const handleWindChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setTargetWeather({ environment: { wind: Number(event.target.value) } });
+    setTargetWeather({ environment: { wind: Number(event.target.value) } }, true);
   };
 
   return (
@@ -90,7 +152,7 @@ export default function DebugPanel() {
           <button
             key={preset.label}
             type="button"
-            onClick={() => setTargetWeather(preset.apply())}
+            onClick={() => setTargetWeather(preset.apply(), true)}
             className="border border-white/20 px-3 py-1 transition hover:bg-white/10"
           >
             {preset.label}

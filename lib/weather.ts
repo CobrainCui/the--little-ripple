@@ -90,12 +90,18 @@ export function sanitizeCloudColor(value: unknown): string {
   return fallback;
 }
 
+function isMeaninglessRipple(text: string): boolean {
+  const normalized = text.replace(/[。！？…~.!?]/g, "").trim();
+  return /^(嗯|啊|哦|呃|唉|哈|呀|诶|欸|唔|噢|喔)$/u.test(normalized);
+}
+
 export function sanitizeRippleMsgs(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     .map((item) => item.trim().slice(0, 20))
-    .slice(0, 8);
+    .filter((item) => !isMeaninglessRipple(item))
+    .slice(0, 10);
 }
 
 /** 将大模型返回的新格式映射为引擎可用的 WeatherState。 */

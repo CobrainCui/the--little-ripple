@@ -10,8 +10,11 @@ const COLOR_LERP_FACTOR = 0.01;
 const LAKE_TOP_RATIO = 0.7;
 const LAKE_BOTTOM_RATIO = 0.95;
 
-/** 全面调轻：雨滴上限大幅降低。 */
-const MAX_RAINDROPS = 80;
+/** 全局云团透明度缩放，数值越大云越实、越凸显。 */
+const CLOUD_OPACITY_SCALE = 1.48;
+
+/** 暴雨场景需要更高雨滴上限。 */
+const MAX_RAINDROPS = 220;
 
 interface RainDrop {
   x: number;
@@ -57,26 +60,24 @@ function cloneWeather(state: WeatherState): WeatherState {
   };
 }
 
-function getCloudAlpha(weather: WeatherType): number {
-  if (weather === "clear") return 0.15;
-  if (weather === "breeze") return 0.35;
-  if (weather === "mist") return 0.45;
-  return 1;
+/** 无雨云团尺寸加成——晴天、薄雾等低密度云也要有足够体量。 */
+const DRY_CLOUD_SIZE_BOOST = 1.45;
+const DRY_CLOUD_BASE_EXTRA = 32;
+
+function isDryCloud(weather: WeatherType, rainIntensity: number): boolean {
+  return !isRainWeather(weather) || rainIntensity < 0.08;
 }
 
-function getRainIntensityScale(weather: WeatherType): number {
-  switch (weather) {
-    case "drizzle":
-      return 0.5;
-    case "light_rain":
-      return 0.7;
-    case "showers":
-      return 0.85;
-    case "thunderstorm":
-      return 1;
-    default:
-      return 0;
-  }
+function getCloudBaseRadius(density: number, dry: boolean): number {
+  const base = 120 + density * 80;
+  return dry ? base * DRY_CLOUD_SIZE_BOOST + DRY_CLOUD_BASE_EXTRA : base;
+}
+
+function getCloudAlpha(weather: WeatherType): number {
+  if (weather === "clear") return 0.3;
+  if (weather === "breeze") return 0.52;
+  if (weather === "mist") return 0.62;
+  return 1;
 }
 
 export default function WeatherEngine() {
@@ -117,32 +118,44 @@ export default function WeatherEngine() {
     const ripples: Ripple[] = [];
     let mistPhase = 0;
 
+    let currentMistOpacity = 0;
+    let currentLightningChance = 0;
+    let currentCloudPresence = getCloudAlpha(current.weather);
+
+    const EFFECT_LERP = 0.01;
+
     const getLakeBounds = () => ({
       top: height * LAKE_TOP_RATIO,
       bottom: height * LAKE_BOTTOM_RATIO,
     });
 
-    const spawnRaindrop = (baseX: number, baseY: number, baseRadius: number) => {
+    const spawnRaindrop = (
+      baseX: number,
+      baseY: number,
+      baseRadius: number,
+      stormBoost = false,
+    ) => {
       const { top: lakeTop, bottom: lakeBottom } = getLakeBounds();
-      const dropX = baseX + (Math.random() * 2 - 1) * (baseRadius * 2);
+      const spread = stormBoost ? baseRadius * 3.2 : baseRadius * 2;
+      const dropX = baseX + (Math.random() * 2 - 1) * spread;
 
       raindrops.push({
         x: dropX,
         y: baseY + baseRadius * 0.35 + Math.random() * baseRadius * 0.2,
         targetY: lakeTop + Math.random() * (lakeBottom - lakeTop),
-        length: 6 + current.rain.dropSize * 14,
-        fallSpeed: 2 + Math.random() * 2,
-        opacity: 0.08 + Math.random() * 0.18,
+        length: 8 + current.rain.dropSize * (stormBoost ? 24 : 18),
+        fallSpeed: stormBoost ? 3 + Math.random() * 3 : 2 + Math.random() * 2,
+        opacity: stormBoost ? 0.18 + Math.random() * 0.28 : 0.12 + Math.random() * 0.22,
       });
     };
 
-    const spawnRipple = (x: number, y: number, maxRadius = 16 + Math.random() * 22) => {
+    const spawnRipple = (x: number, y: number, maxRadius = 28 + Math.random() * 36) => {
       ripples.push({
         x,
         y,
         radius: 1,
         maxRadius,
-        opacity: 0.35,
+        opacity: 0.38,
       });
     };
 
@@ -158,7 +171,9 @@ export default function WeatherEngine() {
 
       const baseY = canvas.height * 0.2;
       const currentCloudX = currentCloudXRef.current;
-      const cloudRadius = 120 + current.cloud.density * 80;
+      const target = useWeatherStore.getState().targetWeather;
+      const dry = isDryCloud(target.weather, current.rain.intensity);
+      const cloudRadius = getCloudBaseRadius(current.cloud.density, dry);
 
       const dx = clickX - currentCloudX;
       const dy = clickY - baseY;
@@ -194,7 +209,6 @@ export default function WeatherEngine() {
     const tick = () => {
       const { targetWeather: target, hasStarted } = useWeatherStore.getState();
 
-      current.weather = target.weather;
       current.cloud.color = lerpColor(current.cloud.color, target.cloud.color, COLOR_LERP_FACTOR);
       current.cloud.density = lerp(current.cloud.density, target.cloud.density, LERP_FACTOR);
       current.cloud.speed = lerp(current.cloud.speed, target.cloud.speed, LERP_FACTOR);
@@ -204,22 +218,40 @@ export default function WeatherEngine() {
       current.environment.wind = lerp(current.environment.wind, target.environment.wind, LERP_FACTOR);
       current.environment.hasSun = target.environment.hasSun;
 
+      const targetMistOpacity =
+        target.weather === "mist" || target.weather === "cloudy" ? 1 : 0;
+      currentMistOpacity += (targetMistOpacity - currentMistOpacity) * EFFECT_LERP;
+
+      const targetLightning = target.weather === "thunderstorm" ? 0.01 : 0;
+      currentLightningChance += (targetLightning - currentLightningChance) * EFFECT_LERP;
+
+      const targetCloudPresence = getCloudAlpha(target.weather);
+      currentCloudPresence += (targetCloudPresence - currentCloudPresence) * EFFECT_LERP;
+
       if (hasStarted) {
-        currentCloudXRef.current -= 0.5 + current.cloud.speed * 2;
+        let moveSpeed = 0.18 + current.cloud.speed * 0.32;
+        const canvasWidth = canvas.width;
+        const entryThreshold = canvasWidth - canvasWidth * 0.2;
+
+        // 快进慢陪：刚从右侧入场时加速掠过，进入视野后放慢陪伴
+        if (currentCloudXRef.current > entryThreshold) {
+          moveSpeed += (currentCloudXRef.current - entryThreshold) * 0.003;
+        }
+
+        currentCloudXRef.current -= moveSpeed;
       }
 
       ctx.clearRect(0, 0, width, height);
 
       const wind = current.environment.wind;
-      const cloudAlpha = getCloudAlpha(current.weather);
-      const allowsRain = isRainWeather(current.weather);
 
-      if (hasStarted && current.weather !== "clear") {
+      if (hasStarted && currentCloudPresence > 0.05) {
         const cloudColor = current.cloud.color;
         const density = current.cloud.density;
         const baseY = canvas.height * 0.2;
         const baseX = currentCloudXRef.current;
-        const baseRadius = 120 + density * 80;
+        const dry = isDryCloud(target.weather, current.rain.intensity);
+        const baseRadius = getCloudBaseRadius(density, dry);
         const windStretch = 1 + Math.abs(wind) * 0.8;
 
         const drawCloudPuff = (
@@ -235,8 +267,13 @@ export default function WeatherEngine() {
           ctx.scale(scaleX, scaleY);
 
           const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
-          gradient.addColorStop(0, `rgba(${cloudColor}, ${0.6 * alphaMultiplier * cloudAlpha})`);
-          gradient.addColorStop(0.4, `rgba(${cloudColor}, ${0.3 * alphaMultiplier * cloudAlpha})`);
+          const cloudAlpha = Math.min(
+            1,
+            alphaMultiplier * currentCloudPresence * CLOUD_OPACITY_SCALE,
+          );
+          gradient.addColorStop(0, `rgba(${cloudColor}, ${0.85 * cloudAlpha})`);
+          gradient.addColorStop(0.4, `rgba(${cloudColor}, ${0.52 * cloudAlpha})`);
+          gradient.addColorStop(0.75, `rgba(${cloudColor}, ${0.18 * cloudAlpha})`);
           gradient.addColorStop(1, `rgba(${cloudColor}, 0)`);
 
           ctx.fillStyle = gradient;
@@ -255,12 +292,34 @@ export default function WeatherEngine() {
           useWeatherStore.getState().setCloudActive(false);
         }
 
-        if (allowsRain) {
-          const rainScale = getRainIntensityScale(current.weather);
-          const desiredCount = Math.floor(current.rain.intensity * MAX_RAINDROPS * rainScale);
-          if (current.rain.intensity > 0.01 && raindrops.length < desiredCount) {
-            const spawnCount = Math.max(1, Math.ceil((desiredCount - raindrops.length) * 0.08));
-            for (let i = 0; i < spawnCount; i++) spawnRaindrop(baseX, baseY, baseRadius);
+        if (current.rain.intensity > 0.01) {
+          const intensity = current.rain.intensity;
+          const isStorm = target.weather === "thunderstorm" || currentLightningChance > 0.003;
+          let dropsToSpawn = 0;
+
+          if (intensity > 0.8) {
+            dropsToSpawn = 8 + Math.floor(Math.random() * 6);
+          } else if (intensity > 0.4) {
+            dropsToSpawn = 4 + Math.floor(Math.random() * 4);
+          } else {
+            dropsToSpawn = Math.random() < intensity * 3.5 ? 1 + Math.floor(Math.random() * 2) : 0;
+          }
+
+          if (target.weather === "drizzle") {
+            dropsToSpawn = Math.random() < 0.55 ? 1 + Math.floor(Math.random() * 2) : 0;
+          } else if (target.weather === "light_rain") {
+            dropsToSpawn = Math.max(1, Math.min(dropsToSpawn, 2 + Math.floor(Math.random() * 2)));
+          }
+
+          if (isStorm) {
+            dropsToSpawn += 4 + Math.floor(Math.random() * 4);
+          }
+
+          const room = MAX_RAINDROPS - raindrops.length;
+          dropsToSpawn = Math.min(dropsToSpawn, Math.max(0, room));
+
+          for (let i = 0; i < dropsToSpawn; i++) {
+            spawnRaindrop(baseX, baseY, baseRadius, isStorm);
           }
         }
       }
@@ -268,10 +327,12 @@ export default function WeatherEngine() {
       ctx.lineWidth = 1;
       ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
 
+      const isStormWind = currentLightningChance > 0.003;
+
       for (let i = raindrops.length - 1; i >= 0; i--) {
         const drop = raindrops[i];
         drop.y += drop.fallSpeed;
-        drop.x += wind * (current.weather === "thunderstorm" ? 3.5 : 1.6);
+        drop.x += wind * (isStormWind ? 5.5 : 1.6);
 
         const outOfBounds = drop.x < -30 || drop.x > width + 30;
         const hitTarget = drop.y >= drop.targetY;
@@ -286,10 +347,11 @@ export default function WeatherEngine() {
           continue;
         }
 
-        ctx.globalAlpha = drop.opacity;
+        ctx.globalAlpha = drop.opacity * Math.min(1, current.rain.intensity);
+        const windTilt = isStormWind ? 9 : 5;
         ctx.beginPath();
         ctx.moveTo(drop.x, drop.y);
-        ctx.lineTo(drop.x - wind * 4, drop.y - drop.length);
+        ctx.lineTo(drop.x - wind * windTilt, drop.y - drop.length * (isStormWind ? 1.25 : 1.15));
         ctx.stroke();
       }
 
@@ -297,10 +359,10 @@ export default function WeatherEngine() {
 
       for (let i = ripples.length - 1; i >= 0; i--) {
         const ripple = ripples[i];
-        ripple.radius += (ripple.maxRadius - ripple.radius) * 0.04 + 0.15;
-        ripple.opacity -= 0.006;
+        ripple.radius += (ripple.maxRadius - ripple.radius) * 0.03 + 0.1;
+        ripple.opacity -= 0.003;
 
-        if (ripple.opacity <= 0 || ripple.radius >= ripple.maxRadius * 1.5) {
+        if (ripple.opacity <= 0 || ripple.radius >= ripple.maxRadius * 1.8) {
           ripples.splice(i, 1);
           continue;
         }
@@ -313,7 +375,7 @@ export default function WeatherEngine() {
 
       ctx.globalAlpha = 1;
 
-      if (current.weather === "mist") {
+      if (currentMistOpacity > 0.01) {
         mistPhase += 0.003;
         const gradient = ctx.createLinearGradient(
           width * (0.2 + Math.sin(mistPhase) * 0.08),
@@ -321,15 +383,15 @@ export default function WeatherEngine() {
           width * (0.8 + Math.cos(mistPhase * 0.7) * 0.08),
           height,
         );
-        gradient.addColorStop(0, "rgba(200, 210, 220, 0.06)");
-        gradient.addColorStop(0.5, "rgba(180, 190, 200, 0.1)");
-        gradient.addColorStop(1, "rgba(160, 170, 180, 0.05)");
+        gradient.addColorStop(0, `rgba(200, 210, 220, ${0.06 * currentMistOpacity})`);
+        gradient.addColorStop(0.5, `rgba(180, 190, 200, ${0.1 * currentMistOpacity})`);
+        gradient.addColorStop(1, `rgba(160, 170, 180, ${0.05 * currentMistOpacity})`);
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
       }
 
-      if (current.weather === "thunderstorm" && Math.random() < 0.01) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+      if (Math.random() < currentLightningChance) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.1 * Math.min(currentLightningChance / 0.01, 1)})`;
         ctx.fillRect(0, 0, width, height * 0.45);
       }
 
