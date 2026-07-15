@@ -84,6 +84,9 @@ interface WeatherStore {
   hasStarted: boolean;
   cloudSpawnKey: number;
 
+  showTutorial: boolean;
+  closeTutorial: () => void;
+
   setTargetWeather: (target: Partial<WeatherState>, isModification?: boolean) => void;
   resetWeather: () => void;
   setCloudActive: (active: boolean) => void;
@@ -104,6 +107,11 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
   lastRippleHit: null,
   hasStarted: false,
   cloudSpawnKey: 0,
+  showTutorial: true,
+
+  closeTutorial: () => {
+    set({ showTutorial: false });
+  },
 
   setTargetWeather: (partial, isModification = false) => {
     const prevTarget = get().targetWeather;

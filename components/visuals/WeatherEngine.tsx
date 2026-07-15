@@ -11,7 +11,7 @@ const LAKE_TOP_RATIO = 0.7;
 const LAKE_BOTTOM_RATIO = 0.95;
 
 /** 全局云团透明度缩放，数值越大云越实、越凸显。 */
-const CLOUD_OPACITY_SCALE = 1.48;
+const CLOUD_OPACITY_SCALE = 1.72;
 
 /** 暴雨场景需要更高雨滴上限。 */
 const MAX_RAINDROPS = 220;
@@ -74,9 +74,9 @@ function getCloudBaseRadius(density: number, dry: boolean): number {
 }
 
 function getCloudAlpha(weather: WeatherType): number {
-  if (weather === "clear") return 0.3;
-  if (weather === "breeze") return 0.52;
-  if (weather === "mist") return 0.62;
+  if (weather === "clear") return 0.38;
+  if (weather === "breeze") return 0.6;
+  if (weather === "mist") return 0.72;
   return 1;
 }
 
@@ -271,9 +271,9 @@ export default function WeatherEngine() {
             1,
             alphaMultiplier * currentCloudPresence * CLOUD_OPACITY_SCALE,
           );
-          gradient.addColorStop(0, `rgba(${cloudColor}, ${0.85 * cloudAlpha})`);
-          gradient.addColorStop(0.4, `rgba(${cloudColor}, ${0.52 * cloudAlpha})`);
-          gradient.addColorStop(0.75, `rgba(${cloudColor}, ${0.18 * cloudAlpha})`);
+          gradient.addColorStop(0, `rgba(${cloudColor}, ${0.92 * cloudAlpha})`);
+          gradient.addColorStop(0.4, `rgba(${cloudColor}, ${0.62 * cloudAlpha})`);
+          gradient.addColorStop(0.75, `rgba(${cloudColor}, ${0.24 * cloudAlpha})`);
           gradient.addColorStop(1, `rgba(${cloudColor}, 0)`);
 
           ctx.fillStyle = gradient;

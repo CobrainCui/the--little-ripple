@@ -91,8 +91,9 @@ export function sanitizeCloudColor(value: unknown): string {
 }
 
 function isMeaninglessRipple(text: string): boolean {
-  const normalized = text.replace(/[。！？…~.!?]/g, "").trim();
-  return /^(嗯|啊|哦|呃|唉|哈|呀|诶|欸|唔|噢|喔)$/u.test(normalized);
+  const normalized = text.replace(/[。！？…~.!?,]/g, "").trim();
+  if (/^(嗯|啊|哦|呃|唉|哈|呀|诶|欸|唔|噢|喔)$/u.test(normalized)) return true;
+  return /^(hmm|hm|uh|um|ah|oh|eh|mhm|mm)$/i.test(normalized);
 }
 
 export function sanitizeRippleMsgs(value: unknown): string[] {
