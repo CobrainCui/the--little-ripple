@@ -6,10 +6,22 @@ import { useWeatherStore } from "@/store/useWeatherStore";
 const SERIF_FONT = '"Noto Serif SC", "Songti SC", "SimSun", serif';
 
 const TUTORIAL_LINES = [
-  "在这里，语言会化作一场天气。",
-  "云朵路过时，你可以试着触碰它。",
-  "雨落下时，也可以轻抚水面的波纹。",
-  "右下角的微光，能换上属于你的风景。",
+  {
+    zh: "在这里，语言会化作一场天气。",
+    en: "Here, words become weather.",
+  },
+  {
+    zh: "云朵路过时，你可以试着触碰它。",
+    en: "When a cloud drifts by, try touching it.",
+  },
+  {
+    zh: "雨落下时，也可以轻抚水面的波纹。",
+    en: "When rain falls, gently touch the ripples.",
+  },
+  {
+    zh: "右下角的微光，能换上属于你的风景。",
+    en: "A soft glow below can change your scenery.",
+  },
 ] as const;
 
 const LINE_INTERVAL_MS = 1500;
@@ -66,27 +78,30 @@ export default function TutorialOverlay() {
 
       <div
         style={{ fontFamily: SERIF_FONT }}
-        className="max-w-lg space-y-8 px-8 text-center font-serif tracking-[0.2em] text-white/80"
+        className="max-w-xl space-y-10 px-8 text-center font-serif tracking-[0.2em] text-white/80"
       >
         {TUTORIAL_LINES.map((line, index) => (
-          <p
-            key={line}
-            className={`text-base leading-relaxed transition-opacity duration-1000 md:text-lg ${
+          <div
+            key={line.zh}
+            className={`space-y-3 transition-opacity duration-1000 ${
               revealedCount > index ? "opacity-100" : "opacity-0"
             }`}
           >
-            {line}
-          </p>
+            <p className="text-base leading-relaxed md:text-lg">{line.zh}</p>
+            <p className="text-sm leading-relaxed tracking-[0.16em] text-white/45 md:text-base">
+              {line.en}
+            </p>
+          </div>
         ))}
 
         <button
           type="button"
           onClick={closeTutorial}
-          className={`mx-auto mt-4 cursor-pointer border-b border-white/20 pb-1 text-sm tracking-[0.25em] transition-opacity duration-1000 hover:text-white ${
+          className={`mx-auto mt-4 cursor-pointer border-b border-white/20 pb-1 text-sm tracking-[0.2em] transition-opacity duration-1000 hover:text-white ${
             showEnter ? "text-white/60 opacity-100" : "pointer-events-none text-white/60 opacity-0"
           }`}
         >
-          走进世界
+          走进世界 / Enter
         </button>
       </div>
     </div>
