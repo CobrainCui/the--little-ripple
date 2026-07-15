@@ -16,6 +16,7 @@ function buildPreset(
     wind?: number;
   } = {},
 ): Partial<WeatherState> {
+  const current = useWeatherStore.getState().targetWeather;
   const profiles: Record<
     WeatherType,
     {
@@ -46,16 +47,19 @@ function buildPreset(
   return {
     weather,
     cloud: {
-      color: overrides.cloudColor ?? "200, 210, 220",
+      ...current.cloud,
+      color: overrides.cloudColor ?? current.cloud.color,
       density: profile.density,
       speed: profile.speed,
     },
     rain: {
+      ...current.rain,
       intensity,
       dropSize: profile.dropSize,
-      duration: 30000,
+      duration: current.rain.duration || 30000,
     },
     environment: {
+      ...current.environment,
       wind,
       hasSun: profile.hasSun,
     },
@@ -102,11 +106,19 @@ export default function DebugPanel() {
   if (!visible) return null;
 
   const handleIntensityChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setTargetWeather({ rain: { intensity: Number(event.target.value) } }, true);
+    const currentRain = useWeatherStore.getState().targetWeather.rain;
+    setTargetWeather(
+      { rain: { ...currentRain, intensity: Number(event.target.value) } },
+      true,
+    );
   };
 
   const handleWindChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setTargetWeather({ environment: { wind: Number(event.target.value) } }, true);
+    const currentEnvironment = useWeatherStore.getState().targetWeather.environment;
+    setTargetWeather(
+      { environment: { ...currentEnvironment, wind: Number(event.target.value) } },
+      true,
+    );
   };
 
   return (
