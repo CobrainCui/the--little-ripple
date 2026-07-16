@@ -20,15 +20,18 @@ export default function WindLetter() {
   const [isSent, setIsSent] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetState = () => {
     setContent("");
     setIsSubmitting(false);
     setIsSent(false);
     setIsClosing(false);
+    setSubmitError(false);
   };
 
   const closeOverlay = () => {
@@ -50,6 +53,7 @@ export default function WindLetter() {
   useEffect(() => {
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     };
   }, []);
 
@@ -99,12 +103,33 @@ export default function WindLetter() {
         body: JSON.stringify({ content: trimmed }),
       });
 
-      if (!response.ok) throw new Error("发送失败");
+      let data: { success?: boolean; error?: string } | null = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error ?? `HTTP ${response.status}`);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error ?? "服务器未确认发送成功");
+      }
 
       setIsSent(true);
       scheduleAutoClose();
     } catch (error) {
+      const message = error instanceof Error ? error.message : "发送失败";
       console.error("[WindLetter] 信件未能递出：", error);
+      alert(`发送失败: ${message}`);
+
+      setSubmitError(true);
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = setTimeout(() => {
+        setSubmitError(false);
+      }, 2000);
     } finally {
       setIsSubmitting(false);
     }
@@ -164,9 +189,17 @@ export default function WindLetter() {
                 <button
                   type="submit"
                   disabled={isSubmitting || !content.trim()}
-                  className="mt-10 cursor-pointer border-b border-white/20 pb-1 text-sm tracking-[0.25em] text-white/40 transition hover:text-white/80 disabled:cursor-default disabled:opacity-30"
+                  className={`mt-10 cursor-pointer border-b pb-1 text-sm tracking-[0.25em] transition disabled:cursor-default disabled:opacity-30 ${
+                    submitError
+                      ? "border-red-400/40 text-red-400/80"
+                      : "border-white/20 text-white/40 hover:text-white/80"
+                  }`}
                 >
-                  {isSubmitting ? "正在递出..." : "随风递出"}
+                  {submitError
+                    ? "递出失败，请重试"
+                    : isSubmitting
+                      ? "正在递出..."
+                      : "随风递出"}
                 </button>
               </>
             )}

@@ -8,6 +8,11 @@ export interface WindLetter {
   timestamp: number;
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
 export async function POST(request: NextRequest) {
   let content = "";
 
@@ -32,7 +37,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[/api/letter] 存储失败：", error);
-    return NextResponse.json({ error: "信件未能存入风中" }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(error, "信件未能存入风中") },
+      { status: 500 },
+    );
   }
 }
 
@@ -49,6 +57,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ letters });
   } catch (error) {
     console.error("[/api/letter] 读取失败：", error);
-    return NextResponse.json({ error: "无法读取风中的信" }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(error, "无法读取风中的信") },
+      { status: 500 },
+    );
   }
 }
