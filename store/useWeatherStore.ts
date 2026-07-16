@@ -87,6 +87,9 @@ interface WeatherStore {
   showTutorial: boolean;
   closeTutorial: () => void;
 
+  isWritingLetter: boolean;
+  setWritingLetter: (isWriting: boolean) => void;
+
   setTargetWeather: (target: Partial<WeatherState>, isModification?: boolean) => void;
   resetWeather: () => void;
   setCloudActive: (active: boolean) => void;
@@ -111,6 +114,12 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
 
   closeTutorial: () => {
     set({ showTutorial: false });
+  },
+
+  isWritingLetter: false,
+
+  setWritingLetter: (isWriting) => {
+    set({ isWritingLetter: isWriting });
   },
 
   setTargetWeather: (partial, isModification = false) => {

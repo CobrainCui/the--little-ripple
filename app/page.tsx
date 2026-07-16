@@ -4,6 +4,7 @@ import InteractiveLayer from "@/components/ui/InteractiveLayer";
 import ThoughtInput from "@/components/ui/ThoughtInput";
 import TutorialOverlay from "@/components/ui/TutorialOverlay";
 import Uploader from "@/components/ui/Uploader";
+import WindLetter from "@/components/ui/WindLetter";
 import WeatherEngine from "@/components/visuals/WeatherEngine";
 
 export default function Home() {
@@ -15,6 +16,7 @@ export default function Home() {
       <ThoughtInput />
       <InteractiveLayer />
       <DebugPanel />
+      <WindLetter />
       <TutorialOverlay />
     </main>
   );
