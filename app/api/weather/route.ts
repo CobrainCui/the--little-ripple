@@ -8,7 +8,15 @@ const client = new OpenAI({
   baseURL: process.env.OPENAI_BASE_URL || undefined,
 });
 
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const MODEL = process.env.OPENAI_MODEL || "deepseek/deepseek-v4-pro-202606";
+
+const GRACEFUL_FALLBACK = {
+  weather: "breeze",
+  cloudColor: "220, 230, 240",
+  duration: 60,
+  cloudSpeech: "云朵刚才走神了，给你带来了一阵微风。",
+  rippleSpeeches: ["微风起", "安静", "云在发呆", "吹过了", "呼~"],
+} as const;
 
 const SYSTEM_PROMPT = `你是一个存在于数字世界里的自然景观系统。你不是聊天机器人，不是心理咨询师，也不是人类的助手。
 你的职责是：倾听用户的输入，然后在这个世界里降下一场对应的天气。
@@ -79,10 +87,8 @@ const SYSTEM_PROMPT = `你是一个存在于数字世界里的自然景观系统
 
 必须返回纯 JSON 对象，不要带任何 Markdown 标记、代码块或解释文字。`;
 
-function buildFallbackWeather(language: InputLanguage) {
-  const cloudSpeech =
-    language === "en" ? "A little light today." : "今天会有一点光。";
-  return mapApiResponseToWeatherState({ weather: "clear", cloudSpeech });
+function buildGracefulFallback() {
+  return mapApiResponseToWeatherState(GRACEFUL_FALLBACK);
 }
 
 function parseModelOutput(content: string): unknown | null {
@@ -144,14 +150,14 @@ export async function POST(request: NextRequest) {
     const parsed = parseModelOutput(content);
 
     if (!parsed) {
-      console.error("[/api/weather] 解析失败，返回默认晴天");
-      return NextResponse.json(buildFallbackWeather(language));
+      console.error("[/api/weather] 解析失败，返回微风兜底");
+      return NextResponse.json(buildGracefulFallback());
     }
 
     const weather = mapApiResponseToWeatherState(parsed);
     return NextResponse.json(weather);
   } catch (error) {
-    console.error("[/api/weather] 呼叫大模型失败：", error);
-    return NextResponse.json(buildFallbackWeather(language));
+    console.error("[Weather API Error]:", error);
+    return NextResponse.json(buildGracefulFallback());
   }
 }
