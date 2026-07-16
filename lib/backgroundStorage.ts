@@ -1,7 +1,7 @@
 import { del, get, set } from "idb-keyval";
 
-const KEYS_KEY = "ripple-background-keys";
-const ACTIVE_ID_KEY = "ripple-background-active-id";
+const KEYS_KEY = "riplora-background-keys";
+const ACTIVE_ID_KEY = "riplora-background-active-id";
 
 export interface StoredBackground {
   id: string;

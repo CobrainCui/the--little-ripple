@@ -124,7 +124,7 @@ export default function DebugPanel() {
   return (
     <div className="fixed top-4 left-4 z-50 w-64 rounded-lg border border-white/10 bg-black/60 p-5 text-white/80 backdrop-blur-md">
       <h2 className="mb-4 text-sm font-medium tracking-wide text-white">
-        小波纹 气象控制台
+        Riplora 气象控制台
       </h2>
 
       <label className="mb-4 block text-xs">

@@ -1,11 +1,11 @@
 > [!IMPORTANT]
 > **Copyright Notice / 版权声明**
 > 
-> © 2026 小波纹 (Ripple). All Rights Reserved.
+> © 2026 小波纹 (Riplora). All Rights Reserved.
 > Commercial use of this project, including its code, assets, and concepts, is strictly prohibited without explicit written permission.
 > 未经明确书面许可，严禁将本项目（包括但不限于代码、设计及概念）用于任何商业用途。
 
-# 小波纹 · Ripple
+# 小波纹 · Riplora
 
 > A gentle AI companion where words become weather.
 
@@ -13,7 +13,7 @@
 
 ## About
 
-小波纹（Ripple）是一个仍在开发中的 AI 陪伴产品。
+小波纹（Riplora）是一个仍在开发中的 AI 陪伴产品。
 
 它不是聊天机器人。
 
@@ -63,7 +63,7 @@ Current MVP includes:
 - 🌤 Weather generation powered by LLM
 - ☁ Interactive clouds
 - 🌧 Dynamic rain animation
-- 🌊 Ripple interaction
+- 🌊 Water ripple interaction
 - 💬 Gentle AI responses
 - 🎨 Background switching
 

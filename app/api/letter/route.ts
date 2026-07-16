@@ -1,7 +1,7 @@
 import Redis from "ioredis";
 import { NextRequest, NextResponse } from "next/server";
 
-const LETTERS_KEY = "ripple_letters";
+const LETTERS_KEY = "riplora_letters";
 
 export interface WindLetter {
   content: string;
