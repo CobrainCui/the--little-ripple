@@ -7,28 +7,24 @@ const SERIF_FONT = '"Noto Serif SC", "Songti SC", "SimSun", serif';
 
 const TUTORIAL_LINES = [
   {
-    zh: "在这里，语言会化作一场天气。",
-    en: "Here, words become weather.",
+    zh: "1. 在底部输入一句话，世界会为你降下一场天气。",
+    en: "1. Type a line at the bottom — the world will bring you weather.",
   },
   {
-    zh: "云朵路过时，你可以试着触碰它。",
-    en: "When a cloud drifts by, try touching it.",
+    zh: "2. 试着点击飘过的云朵，或者水面上荡开的波纹。",
+    en: "2. Try tapping the drifting cloud, or ripples on the water.",
   },
   {
-    zh: "雨落下时，也可以轻抚水面的波纹。",
-    en: "When rain falls, gently touch the ripples.",
-  },
-  {
-    zh: "右下角的微光，能换上属于你的风景。",
-    en: "A soft glow below can change your scenery.",
+    zh: "3. 右下角可更换背景，左下角可递出一封信。",
+    en: "3. Change the background at bottom-right; leave a letter at bottom-left.",
   },
 ] as const;
 
-const LINE_INTERVAL_MS = 1500;
-const ENTER_BUTTON_DELAY_MS = 1500;
+const LINE_INTERVAL_MS = 1200;
+const ENTER_BUTTON_DELAY_MS = 1000;
 
 /**
- * 进入世界前的情绪缓冲——不是教程，是一段缓缓浮现的诗。
+ * 进入世界前的轻引导——清晰、留白、双语。
  */
 export default function TutorialOverlay() {
   const showTutorial = useWeatherStore((state) => state.showTutorial);
@@ -78,17 +74,19 @@ export default function TutorialOverlay() {
 
       <div
         style={{ fontFamily: SERIF_FONT }}
-        className="max-w-xl space-y-10 px-8 text-center font-serif tracking-[0.2em] text-white/80"
+        className="max-w-2xl px-8 text-center font-serif"
       >
         {TUTORIAL_LINES.map((line, index) => (
           <div
             key={line.zh}
-            className={`space-y-3 transition-opacity duration-1000 ${
+            className={`mb-6 transition-opacity duration-700 ease-out ${
               revealedCount > index ? "opacity-100" : "opacity-0"
             }`}
           >
-            <p className="text-base leading-relaxed md:text-lg">{line.zh}</p>
-            <p className="text-sm leading-relaxed tracking-[0.16em] text-white/45 md:text-base">
+            <p className="text-lg leading-relaxed tracking-wide text-white/80 md:text-xl">
+              {line.zh}
+            </p>
+            <p className="mt-2 text-base leading-relaxed tracking-normal text-white/45 md:text-lg">
               {line.en}
             </p>
           </div>
@@ -97,11 +95,11 @@ export default function TutorialOverlay() {
         <button
           type="button"
           onClick={closeTutorial}
-          className={`mx-auto mt-4 cursor-pointer border-b border-white/20 pb-1 text-sm tracking-[0.2em] transition-opacity duration-1000 hover:text-white ${
-            showEnter ? "text-white/60 opacity-100" : "pointer-events-none text-white/60 opacity-0"
+          className={`mx-auto mt-2 cursor-pointer border-b border-white/20 pb-1 text-base tracking-wide transition-opacity duration-700 ease-out hover:text-white md:text-lg ${
+            showEnter ? "text-white/70 opacity-100" : "pointer-events-none text-white/70 opacity-0"
           }`}
         >
-          走进世界 / Enter
+          {"开始体验 -> / Start ->"}
         </button>
       </div>
     </div>

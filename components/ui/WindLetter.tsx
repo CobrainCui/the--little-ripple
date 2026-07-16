@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useWeatherStore } from "@/store/useWeatherStore";
 
 const SERIF_FONT = '"Noto Serif SC", "Songti SC", "SimSun", serif';
 const SUCCESS_MESSAGE = "信已随风飘走...";
-const CLOSE_DELAY_MS = 2000;
-const FADE_DURATION_MS = 1200;
+const SUCCESS_CLOSE_MS = 1500;
+const FADE_OUT_MS = 500;
 
 /**
  * 风中的信 — 不是意见箱，只是悄悄递给世界的一句话。
@@ -16,31 +16,42 @@ export default function WindLetter() {
   const setWritingLetter = useWeatherStore((state) => state.setWritingLetter);
 
   const [content, setContent] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetState = () => {
     setContent("");
-    setIsSending(false);
+    setIsSubmitting(false);
     setIsSent(false);
     setIsClosing(false);
   };
 
-  const closeLetter = () => {
-    if (isSending) return;
+  const closeOverlay = () => {
     resetState();
     setWritingLetter(false);
   };
 
-  const beginGracefulClose = () => {
-    setIsClosing(true);
-    window.setTimeout(() => {
-      closeLetter();
-    }, FADE_DURATION_MS);
+  const scheduleAutoClose = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+
+    closeTimerRef.current = setTimeout(() => {
+      setIsClosing(true);
+      closeTimerRef.current = setTimeout(() => {
+        closeOverlay();
+      }, FADE_OUT_MS);
+    }, SUCCESS_CLOSE_MS);
   };
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isWritingLetter) {
@@ -48,28 +59,38 @@ export default function WindLetter() {
       return;
     }
 
+    resetState();
     setIsOpen(false);
     const frame = requestAnimationFrame(() => setIsOpen(true));
-    textareaRef.current?.focus();
+    return () => cancelAnimationFrame(frame);
+  }, [isWritingLetter]);
+
+  useEffect(() => {
+    if (!isWritingLetter) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isSending && !isSent) {
-        closeLetter();
+      if (event.key === "Escape" && !isSubmitting && !isSent) {
+        closeOverlay();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isWritingLetter, isSending, isSent]);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isWritingLetter, isSubmitting, isSent]);
 
-  const handleSend = async () => {
+  useEffect(() => {
+    if (isWritingLetter && !isSent && !isSubmitting) {
+      textareaRef.current?.focus();
+    }
+  }, [isWritingLetter, isSent, isSubmitting]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     const trimmed = content.trim();
-    if (!trimmed || isSending || isSent) return;
+    if (!trimmed || isSubmitting || isSent) return;
 
-    setIsSending(true);
+    setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/letter", {
@@ -78,21 +99,20 @@ export default function WindLetter() {
         body: JSON.stringify({ content: trimmed }),
       });
 
-      if (!response.ok) {
-        throw new Error("发送失败");
-      }
+      if (!response.ok) throw new Error("发送失败");
 
       setIsSent(true);
-      setIsSending(false);
-      setContent(SUCCESS_MESSAGE);
-
-      window.setTimeout(() => {
-        beginGracefulClose();
-      }, CLOSE_DELAY_MS);
+      scheduleAutoClose();
     } catch (error) {
       console.error("[WindLetter] 信件未能递出：", error);
-      setIsSending(false);
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleBackdropClick = () => {
+    if (isSubmitting || isSent) return;
+    closeOverlay();
   };
 
   return (
@@ -102,49 +122,55 @@ export default function WindLetter() {
         onClick={() => setWritingLetter(true)}
         className="pointer-events-auto fixed bottom-8 left-8 z-50 cursor-pointer text-sm tracking-widest text-white/20 transition hover:text-white/60"
       >
-        落下一封信...
+        落下一封信... / Leave a letter...
       </button>
 
       {isWritingLetter && (
         <div
           role="presentation"
-          onClick={closeLetter}
-          className={`fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-[1200ms] ease-out ${
+          onClick={handleBackdropClick}
+          className={`fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-500 ease-out ${
             isClosing || !isOpen ? "opacity-0" : "opacity-100"
           }`}
         >
-          <div
-            role="presentation"
+          <form
+            onSubmit={(event) => void handleSubmit(event)}
             onClick={(event) => event.stopPropagation()}
-            className={`flex w-full max-w-md flex-col items-center px-8 transition-all duration-[1200ms] ease-out ${
-              isClosing ? "translate-y-2 scale-[1.02] opacity-0 blur-[2px]" : "translate-y-0 opacity-100 blur-0"
+            className={`flex w-full max-w-lg flex-col items-center px-8 transition-all duration-500 ease-out ${
+              isClosing ? "translate-y-1 scale-[1.01] opacity-0 blur-[1px]" : "opacity-100 blur-0"
             }`}
             style={{ fontFamily: SERIF_FONT }}
           >
-            <textarea
-              ref={textareaRef}
-              value={content}
-              readOnly={isSent}
-              disabled={isSending}
-              rows={4}
-              placeholder="想对这个世界说点什么..."
-              onChange={(event) => setContent(event.target.value)}
-              className={`w-full resize-none border-0 border-b border-white/15 bg-transparent py-3 text-center text-base leading-relaxed tracking-[0.15em] text-white/80 outline-none transition-colors placeholder:text-white/30 focus:border-white/30 disabled:cursor-default ${
-                isSent ? "animate-pulse text-white/50" : ""
-              }`}
-            />
+            {isSent ? (
+              <p className="animate-pulse font-serif tracking-widest text-white/60">
+                {SUCCESS_MESSAGE}
+              </p>
+            ) : (
+              <>
+                <p className="mb-4 text-center font-serif text-xs tracking-widest text-white/30">
+                  写给造物主的信 · Feedback
+                </p>
 
-            {!isSent && (
-              <button
-                type="button"
-                disabled={isSending || !content.trim()}
-                onClick={() => void handleSend()}
-                className="mt-10 cursor-pointer border-b border-white/20 pb-1 text-sm tracking-[0.25em] text-white/40 transition hover:text-white/80 disabled:cursor-default disabled:opacity-30"
-              >
-                {isSending ? "递出中..." : "随风递出"}
-              </button>
+                <textarea
+                  ref={textareaRef}
+                  value={content}
+                  disabled={isSubmitting}
+                  rows={4}
+                  placeholder="关于这个世界的建议，或是期待的新天气... / Suggestions or new weather you wish for..."
+                  onChange={(event) => setContent(event.target.value)}
+                  className="w-full resize-none border-0 border-b border-white/15 bg-transparent py-3 text-center text-base leading-relaxed tracking-[0.12em] text-white/80 outline-none transition-colors placeholder:text-white/30 focus:border-white/30 disabled:cursor-default disabled:opacity-60"
+                />
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !content.trim()}
+                  className="mt-10 cursor-pointer border-b border-white/20 pb-1 text-sm tracking-[0.25em] text-white/40 transition hover:text-white/80 disabled:cursor-default disabled:opacity-30"
+                >
+                  {isSubmitting ? "正在递出..." : "随风递出"}
+                </button>
+              </>
             )}
-          </div>
+          </form>
         </div>
       )}
     </>
