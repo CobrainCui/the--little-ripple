@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import Redis from "ioredis";
 import { NextRequest, NextResponse } from "next/server";
 
 const LETTERS_KEY = "ripple_letters";
@@ -8,9 +8,36 @@ export interface WindLetter {
   timestamp: number;
 }
 
+const globalForRedis = globalThis as unknown as { redis: Redis | undefined };
+
+function getRedis(): Redis {
+  const url = process.env.REDIS_URL;
+  if (!url) {
+    throw new Error("REDIS_URL is not configured");
+  }
+
+  if (!globalForRedis.redis) {
+    globalForRedis.redis = new Redis(url);
+  }
+
+  return globalForRedis.redis;
+}
+
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   return fallback;
+}
+
+function parseLetter(raw: string): WindLetter | null {
+  try {
+    const parsed = JSON.parse(raw) as WindLetter;
+    if (typeof parsed.content === "string" && typeof parsed.timestamp === "number") {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -28,12 +55,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const redis = getRedis();
     const letter: WindLetter = {
       content: content.slice(0, 2000),
       timestamp: Date.now(),
     };
 
-    await kv.lpush(LETTERS_KEY, letter);
+    await redis.lpush(LETTERS_KEY, JSON.stringify(letter));
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[/api/letter] 存储失败：", error);
@@ -53,7 +81,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const letters = (await kv.lrange<WindLetter>(LETTERS_KEY, 0, -1)) ?? [];
+    const redis = getRedis();
+    const rawLetters = await redis.lrange(LETTERS_KEY, 0, -1);
+    const letters = rawLetters
+      .map(parseLetter)
+      .filter((letter): letter is WindLetter => letter !== null);
+
     return NextResponse.json({ letters });
   } catch (error) {
     console.error("[/api/letter] 读取失败：", error);
