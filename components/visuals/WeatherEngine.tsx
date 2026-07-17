@@ -16,6 +16,11 @@ const CLOUD_OPACITY_SCALE = 1.72;
 /** 暴雨场景需要更高雨滴上限。 */
 const MAX_RAINDROPS = 220;
 
+const EMBRYO_CLOUD_COLOR = "255, 255, 255";
+const EMBRYO_CLOUD_PRESENCE = 0.12;
+const PENDING_DISSOLVE_LERP = 0.035;
+const PENDING_WIND_BOOST = 0.2;
+
 interface RainDrop {
   x: number;
   y: number;
@@ -68,8 +73,8 @@ function isDryCloud(weather: WeatherType, rainIntensity: number): boolean {
   return !isRainWeather(weather) || rainIntensity < 0.08;
 }
 
-function getCloudBaseRadius(density: number, dry: boolean): number {
-  const base = 120 + density * 80;
+function getCloudBaseRadius(canvasWidth: number, density: number, dry: boolean): number {
+  const base = Math.min(canvasWidth * 0.3, 120) + density * 80;
   return dry ? base * DRY_CLOUD_SIZE_BOOST + DRY_CLOUD_BASE_EXTRA : base;
 }
 
@@ -159,7 +164,7 @@ export default function WeatherEngine() {
       });
     };
 
-    const handleCanvasClick = (event: MouseEvent) => {
+    const handleCanvasClick = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
@@ -167,13 +172,13 @@ export default function WeatherEngine() {
       const clickY = (event.clientY - rect.top) * scaleY;
 
       const state = useWeatherStore.getState();
-      if (!state.hasStarted) return;
+      if (!state.hasStarted && !state.isWeatherPending) return;
 
       const baseY = canvas.height * 0.2;
       const currentCloudX = currentCloudXRef.current;
       const target = useWeatherStore.getState().targetWeather;
       const dry = isDryCloud(target.weather, current.rain.intensity);
-      const cloudRadius = getCloudBaseRadius(current.cloud.density, dry);
+      const cloudRadius = getCloudBaseRadius(canvas.width, current.cloud.density, dry);
 
       const dx = clickX - currentCloudX;
       const dy = clickY - baseY;
@@ -202,39 +207,59 @@ export default function WeatherEngine() {
       state.setCloudActive(false);
     };
 
-    canvas.addEventListener("click", handleCanvasClick);
+    canvas.addEventListener("pointerdown", handleCanvasClick);
 
     let frameId = 0;
 
     const tick = () => {
-      const { targetWeather: target, hasStarted } = useWeatherStore.getState();
+      const { targetWeather: target, hasStarted, isWeatherPending } =
+        useWeatherStore.getState();
 
-      current.cloud.color = lerpColor(current.cloud.color, target.cloud.color, COLOR_LERP_FACTOR);
-      current.cloud.density = lerp(current.cloud.density, target.cloud.density, LERP_FACTOR);
+      const dissolveLerp = isWeatherPending ? PENDING_DISSOLVE_LERP : EFFECT_LERP;
+      const rainTarget = isWeatherPending ? 0 : target.rain.intensity;
+      const windTarget = isWeatherPending
+        ? Math.min(1, Math.max(target.environment.wind, current.environment.wind) + PENDING_WIND_BOOST)
+        : target.environment.wind;
+
+      current.cloud.color = lerpColor(
+        current.cloud.color,
+        isWeatherPending ? EMBRYO_CLOUD_COLOR : target.cloud.color,
+        isWeatherPending ? COLOR_LERP_FACTOR * 1.5 : COLOR_LERP_FACTOR,
+      );
+      current.cloud.density = lerp(
+        current.cloud.density,
+        isWeatherPending ? 0.06 : target.cloud.density,
+        isWeatherPending ? dissolveLerp : LERP_FACTOR,
+      );
       current.cloud.speed = lerp(current.cloud.speed, target.cloud.speed, LERP_FACTOR);
-      current.rain.intensity = lerp(current.rain.intensity, target.rain.intensity, LERP_FACTOR);
+      current.rain.intensity = lerp(current.rain.intensity, rainTarget, dissolveLerp);
       current.rain.dropSize = lerp(current.rain.dropSize, target.rain.dropSize, LERP_FACTOR);
       current.rain.duration = target.rain.duration;
-      current.environment.wind = lerp(current.environment.wind, target.environment.wind, LERP_FACTOR);
+      current.environment.wind = lerp(current.environment.wind, windTarget, isWeatherPending ? 0.04 : LERP_FACTOR);
       current.environment.hasSun = target.environment.hasSun;
 
       const targetMistOpacity =
-        target.weather === "mist" || target.weather === "cloudy" ? 1 : 0;
-      currentMistOpacity += (targetMistOpacity - currentMistOpacity) * EFFECT_LERP;
+        isWeatherPending ? 0 : target.weather === "mist" || target.weather === "cloudy" ? 1 : 0;
+      currentMistOpacity += (targetMistOpacity - currentMistOpacity) * dissolveLerp;
 
-      const targetLightning = target.weather === "thunderstorm" ? 0.01 : 0;
-      currentLightningChance += (targetLightning - currentLightningChance) * EFFECT_LERP;
+      const targetLightning = isWeatherPending ? 0 : target.weather === "thunderstorm" ? 0.01 : 0;
+      currentLightningChance += (targetLightning - currentLightningChance) * dissolveLerp;
 
-      const targetCloudPresence = getCloudAlpha(target.weather);
-      currentCloudPresence += (targetCloudPresence - currentCloudPresence) * EFFECT_LERP;
+      const targetCloudPresence = isWeatherPending
+        ? EMBRYO_CLOUD_PRESENCE
+        : getCloudAlpha(target.weather);
+      currentCloudPresence += (targetCloudPresence - currentCloudPresence) * (isWeatherPending ? 0.025 : EFFECT_LERP);
 
-      if (hasStarted) {
-        let moveSpeed = 0.18 + current.cloud.speed * 0.32;
+      const shouldAnimateCloud = hasStarted || isWeatherPending;
+
+      if (shouldAnimateCloud) {
+        let moveSpeed = isWeatherPending
+          ? 0.06
+          : 0.18 + current.cloud.speed * 0.32;
         const canvasWidth = canvas.width;
         const entryThreshold = canvasWidth - canvasWidth * 0.2;
 
-        // 快进慢陪：刚从右侧入场时加速掠过，进入视野后放慢陪伴
-        if (currentCloudXRef.current > entryThreshold) {
+        if (!isWeatherPending && currentCloudXRef.current > entryThreshold) {
           moveSpeed += (currentCloudXRef.current - entryThreshold) * 0.003;
         }
 
@@ -245,13 +270,13 @@ export default function WeatherEngine() {
 
       const wind = current.environment.wind;
 
-      if (hasStarted && currentCloudPresence > 0.05) {
+      if (shouldAnimateCloud && (currentCloudPresence > 0.05 || isWeatherPending)) {
         const cloudColor = current.cloud.color;
         const density = current.cloud.density;
         const baseY = canvas.height * 0.2;
         const baseX = currentCloudXRef.current;
         const dry = isDryCloud(target.weather, current.rain.intensity);
-        const baseRadius = getCloudBaseRadius(density, dry);
+        const baseRadius = getCloudBaseRadius(canvas.width, density, dry && !isWeatherPending);
         const windStretch = 1 + Math.abs(wind) * 0.8;
 
         const drawCloudPuff = (
@@ -292,7 +317,7 @@ export default function WeatherEngine() {
           useWeatherStore.getState().setCloudActive(false);
         }
 
-        if (current.rain.intensity > 0.01) {
+        if (current.rain.intensity > 0.01 && !isWeatherPending) {
           const intensity = current.rain.intensity;
           const isStorm = target.weather === "thunderstorm" || currentLightningChance > 0.003;
           let dropsToSpawn = 0;
@@ -402,7 +427,7 @@ export default function WeatherEngine() {
 
     return () => {
       cancelAnimationFrame(frameId);
-      canvas.removeEventListener("click", handleCanvasClick);
+      canvas.removeEventListener("pointerdown", handleCanvasClick);
       window.removeEventListener("resize", handleResize);
     };
   }, []);

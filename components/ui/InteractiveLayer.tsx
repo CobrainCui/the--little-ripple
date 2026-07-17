@@ -52,7 +52,7 @@ export default function InteractiveLayer() {
             textShadow: "0 1px 12px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 0, 0, 0.3)",
             animation: "fade-in-slow 3s ease-out forwards",
           }}
-          className="fixed left-1/2 top-24 w-80 max-w-[85vw] -translate-x-1/2 text-center text-base font-serif tracking-[0.2em] text-white/85 opacity-0 md:text-lg"
+          className="fixed left-1/2 top-20 w-[85vw] max-w-sm -translate-x-1/2 text-center text-base font-serif tracking-[0.15em] text-white/85 opacity-0 md:top-24 md:w-80 md:max-w-[85vw] md:tracking-[0.2em] md:text-lg"
         >
           {cloudMsg}
         </p>
@@ -68,7 +68,7 @@ export default function InteractiveLayer() {
             top: item.y,
             animation: "ripple-float-up 8s ease-out forwards",
           }}
-          className="pointer-events-none fixed text-lg font-serif tracking-[0.2em] text-white/90 md:text-xl"
+          className="pointer-events-none fixed max-w-[80vw] -translate-x-1/2 text-base font-serif tracking-[0.15em] text-white/90 md:max-w-none md:text-lg md:tracking-[0.2em] md:text-xl"
         >
           {item.text}
         </span>

@@ -145,7 +145,7 @@ export default function WindLetter() {
       <button
         type="button"
         onClick={() => setWritingLetter(true)}
-        className="pointer-events-auto fixed bottom-8 left-8 z-50 cursor-pointer text-sm tracking-widest text-white/20 transition hover:text-white/60"
+        className="pointer-events-auto fixed bottom-16 left-4 z-50 cursor-pointer p-4 text-sm tracking-widest text-white/20 transition active:text-white/60 md:bottom-8 md:left-8 md:p-0 md:hover:text-white/60"
       >
         落下一封信... / Leave a letter...
       </button>

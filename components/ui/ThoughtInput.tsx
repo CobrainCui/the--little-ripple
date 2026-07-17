@@ -42,6 +42,8 @@ export default function ThoughtInput() {
   const isCloudActive = useWeatherStore((state) => state.isCloudActive);
   const setTargetWeather = useWeatherStore((state) => state.setTargetWeather);
   const setCloudActive = useWeatherStore((state) => state.setCloudActive);
+  const beginWeatherRequest = useWeatherStore((state) => state.beginWeatherRequest);
+  const endWeatherRequest = useWeatherStore((state) => state.endWeatherRequest);
 
   useEffect(() => {
     if (isCloudActive) {
@@ -63,6 +65,7 @@ export default function ThoughtInput() {
     const language = detectInputLanguage(trimmed);
     setSendingLanguage(language);
     setIsSending(true);
+    beginWeatherRequest(isModification);
     console.log("正在发送天气请求...", trimmed);
 
     let succeeded = false;
@@ -100,6 +103,7 @@ export default function ThoughtInput() {
       succeeded = true;
     } catch (error) {
       console.error("提交失败:", error);
+      endWeatherRequest();
     } finally {
       setIsSending(false);
       setSendingLanguage(null);
@@ -117,7 +121,7 @@ export default function ThoughtInput() {
   };
 
   return (
-    <div className="pointer-events-auto fixed bottom-32 left-1/2 z-[100] -translate-x-1/2">
+    <div className="pointer-events-auto fixed bottom-36 left-1/2 z-[100] w-[80vw] max-w-[80vw] -translate-x-1/2 md:bottom-32 md:w-96 md:max-w-none">
       <input
         ref={inputRef}
         type="text"
@@ -126,7 +130,7 @@ export default function ThoughtInput() {
         onChange={(event) => setText(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={`pointer-events-auto w-80 max-w-[85vw] border-0 border-b border-white/20 bg-transparent px-1 py-2 text-center text-sm tracking-wide outline-none transition-colors duration-500 focus:border-white/40 disabled:cursor-default ${
+        className={`pointer-events-auto w-full border-0 border-b border-white/20 bg-transparent px-1 py-2 text-center text-sm tracking-wide outline-none transition-colors duration-500 focus:border-white/40 disabled:cursor-default ${
           isSending
             ? "animate-pulse text-white/40 placeholder:text-white/40"
             : "text-white/80 placeholder:text-white/40"

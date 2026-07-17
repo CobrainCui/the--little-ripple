@@ -90,6 +90,10 @@ interface WeatherStore {
   isWritingLetter: boolean;
   setWritingLetter: (isWriting: boolean) => void;
 
+  isWeatherPending: boolean;
+  beginWeatherRequest: (isModification?: boolean) => void;
+  endWeatherRequest: () => void;
+
   setTargetWeather: (target: Partial<WeatherState>, isModification?: boolean) => void;
   resetWeather: () => void;
   setCloudActive: (active: boolean) => void;
@@ -122,11 +126,27 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
     set({ isWritingLetter: isWriting });
   },
 
-  setTargetWeather: (partial, isModification = false) => {
-    const prevTarget = get().targetWeather;
+  isWeatherPending: false,
+
+  beginWeatherRequest: (isModification = false) => {
     set({
+      isWeatherPending: true,
       hasStarted: true,
       cloudSpawnKey: isModification ? get().cloudSpawnKey : Date.now(),
+    });
+  },
+
+  endWeatherRequest: () => {
+    set({ isWeatherPending: false });
+  },
+
+  setTargetWeather: (partial, isModification = false) => {
+    const prevTarget = get().targetWeather;
+    const wasPending = get().isWeatherPending;
+    set({
+      isWeatherPending: false,
+      hasStarted: true,
+      cloudSpawnKey: isModification || wasPending ? get().cloudSpawnKey : Date.now(),
       targetWeather: {
         weather: partial.weather ?? prevTarget.weather,
         cloud: { ...prevTarget.cloud, ...partial.cloud },
@@ -141,6 +161,7 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
     set({
       targetWeather: defaultWeatherState,
       isCloudActive: false,
+      isWeatherPending: false,
     });
   },
 
