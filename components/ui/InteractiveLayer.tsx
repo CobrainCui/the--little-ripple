@@ -150,7 +150,7 @@ export default function InteractiveLayer() {
             className="pointer-events-auto fixed flex flex-col items-center space-y-4 md:space-y-5"
             style={{
               left: menuAnchor.x,
-              top: menuAnchor.y + menuAnchor.radius * 0.22,
+              top: menuAnchor.y + menuAnchor.radius * 0.22 + 16,
               transform: "translateX(-50%)",
               animation: "fade-in-slow 2.5s ease-out 0.4s forwards",
               opacity: 0,
