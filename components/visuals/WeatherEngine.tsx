@@ -23,12 +23,17 @@ const PENDING_WIND_BOOST = 0.2;
 const CLOUD_X_MIN_RATIO = 0.2;
 const CLOUD_X_MAX_RATIO = 0.8;
 
-const CLOUD_FLOAT_AMPLITUDE = 20;
-const CLOUD_LEAVE_SPEED = 0.65;
-const CLOUD_DISSIPATE_RATE = 0.002;
-const CLOUD_DRIFT_SPEED = 0.22;
+const CLOUD_FLOAT_AMPLITUDE = 0;
+const CLOUD_FLOAT_FREQUENCY = 0.00065;
+const CLOUD_LEAVE_SPEED = 0.18;
+const CLOUD_DISSIPATE_RATE = 0.0012;
+/** 与早期「云从右向左飘」的基底速度对齐，整体再略缓半拍。 */
+const CLOUD_DRIFT_SPEED = 0.14;
 const CLOUD_BOUNCE_MIN_RATIO = 0.14;
 const CLOUD_BOUNCE_MAX_RATIO = 0.86;
+const RIPPLE_BASE_SPREAD = 0.018;
+const RIPPLE_BOOST_SPREAD = 0.065;
+const RIPPLE_BOOST_MAX_RADIUS = 110;
 const PENDING_GATHER_DELAY_MS = 1000;
 
 function randomCloudX(canvasWidth: number): number {
@@ -50,6 +55,8 @@ interface Ripple {
   radius: number;
   maxRadius: number;
   opacity: number;
+  /** 扩散速率，读尽叙事后点击可叠加加速。 */
+  spreadRate: number;
 }
 
 function lerp(from: number, to: number, t: number) {
@@ -221,7 +228,7 @@ export default function WeatherEngine() {
         y: baseY + baseRadius * 0.35 + Math.random() * baseRadius * 0.2,
         targetY: lakeTop + Math.random() * (lakeBottom - lakeTop),
         length: 8 + current.rain.dropSize * (stormBoost ? 24 : 18),
-        fallSpeed: stormBoost ? 3 + Math.random() * 3 : 2 + Math.random() * 2,
+        fallSpeed: stormBoost ? 1.8 + Math.random() * 1.6 : 1.1 + Math.random() * 1.1,
         opacity: stormBoost ? 0.18 + Math.random() * 0.28 : 0.12 + Math.random() * 0.22,
       });
     };
@@ -233,7 +240,34 @@ export default function WeatherEngine() {
         radius: 1,
         maxRadius,
         opacity: 0.38,
+        spreadRate: RIPPLE_BASE_SPREAD,
       });
+    };
+
+    const spawnAcceleratedRipple = (x: number, y: number) => {
+      ripples.push({
+        x,
+        y,
+        radius: 2,
+        maxRadius: 52 + Math.random() * 28,
+        opacity: 0.44,
+        spreadRate: RIPPLE_BASE_SPREAD + RIPPLE_BOOST_SPREAD,
+      });
+    };
+
+    const boostRippleSpread = (ripple: Ripple) => {
+      ripple.maxRadius = Math.min(ripple.maxRadius * 1.3 + 22, RIPPLE_BOOST_MAX_RADIUS);
+      ripple.spreadRate = Math.min(ripple.spreadRate + RIPPLE_BOOST_SPREAD, 0.14);
+      ripple.opacity = Math.min(ripple.opacity + 0.12, 0.55);
+    };
+
+    const isRippleHit = (ripple: Ripple, clickX: number, clickY: number, narrativeExhausted: boolean) => {
+      const distance = Math.hypot(ripple.x - clickX, ripple.y - clickY);
+      if (narrativeExhausted) {
+        // 叙事读尽后：以当前可见波纹环为命中依据，并略放宽触控
+        return distance < Math.max(ripple.radius + 14, 26);
+      }
+      return distance < ripple.maxRadius;
     };
 
     const handleCanvasClick = (event: PointerEvent) => {
@@ -255,7 +289,7 @@ export default function WeatherEngine() {
       const cloudClickable = canStartGathering && state.cloudOpacity > 0.01;
 
       const baseY = canvas.height * 0.2;
-      const floatOffset = Math.sin(Date.now() * 0.001) * CLOUD_FLOAT_AMPLITUDE;
+      const floatOffset = Math.sin(Date.now() * CLOUD_FLOAT_FREQUENCY) * CLOUD_FLOAT_AMPLITUDE;
       const cloudX = currentCloudXRef.current + floatOffset;
       const target = useWeatherStore.getState().targetWeather;
       const dry = isDryCloud(target.weather, current.rain.intensity);
@@ -272,23 +306,32 @@ export default function WeatherEngine() {
         }
       }
 
+      const speeches = state.targetWeather.messages.rippleMsgs;
+      const narrativeExhausted = speeches.length > 0 && state.rippleReadIndex >= speeches.length;
+
       for (let i = ripples.length - 1; i >= 0; i--) {
         const ripple = ripples[i];
-        const distance = Math.hypot(ripple.x - clickX, ripple.y - clickY);
-        if (distance < ripple.maxRadius) {
-          const speeches = state.targetWeather.messages.rippleMsgs;
-          const index = state.rippleReadIndex;
+        if (!isRippleHit(ripple, clickX, clickY, narrativeExhausted)) continue;
 
-          if (index < speeches.length) {
-            const text = speeches[index];
-            state.incrementRippleReadIndex();
-            state.triggerRippleMessage(event.clientX, event.clientY, text);
-          } else {
-            spawnRipple(clickX, clickY, 14 + Math.random() * 8);
-            // 叙事读尽后的沉默；可按需开启：if (index === speeches.length) state.triggerDissipate();
-          }
-
+        if (!narrativeExhausted) {
+          const text = speeches[state.rippleReadIndex];
+          state.incrementRippleReadIndex();
+          state.triggerRippleMessage(event.clientX, event.clientY, text);
           ripples.splice(i, 1);
+        } else {
+          boostRippleSpread(ripple);
+          state.setCloudInteractState("idle");
+        }
+
+        return;
+      }
+
+      // 叙事已全部触发：点击湖面任意处，荡开一圈加速扩散的波纹（无文字）
+      if (narrativeExhausted) {
+        const { top: lakeTop, bottom: lakeBottom } = getLakeBounds();
+        if (clickY >= lakeTop && clickY <= lakeBottom) {
+          spawnAcceleratedRipple(clickX, clickY);
+          state.setCloudInteractState("idle");
           return;
         }
       }
@@ -329,10 +372,10 @@ export default function WeatherEngine() {
 
         if (currentCloudXRef.current <= bounceMinX) {
           currentCloudXRef.current = bounceMinX;
-          cloudDriftVelocityRef.current = Math.abs(cloudDriftVelocityRef.current);
+          cloudDriftVelocityRef.current = CLOUD_DRIFT_SPEED;
         } else if (currentCloudXRef.current >= bounceMaxX) {
           currentCloudXRef.current = bounceMaxX;
-          cloudDriftVelocityRef.current = -Math.abs(cloudDriftVelocityRef.current);
+          cloudDriftVelocityRef.current = -CLOUD_DRIFT_SPEED;
         }
       }
 
@@ -348,14 +391,14 @@ export default function WeatherEngine() {
         cloudOpacity -= CLOUD_DISSIPATE_RATE;
         if (cloudOpacity < 0) cloudOpacity = 0;
       } else if (isWeatherPending && canStartGathering) {
-        cloudOpacity += (0.8 - cloudOpacity) * 0.01;
+        cloudOpacity += (0.8 - cloudOpacity) * 0.006;
       } else if (hasStarted && !isWeatherPending) {
-        cloudOpacity += (1.0 - cloudOpacity) * 0.01;
+        cloudOpacity += (1.0 - cloudOpacity) * 0.006;
       }
 
       currentCloudOpacityRef.current = cloudOpacity;
 
-      const floatOffset = Math.sin(Date.now() * 0.001) * CLOUD_FLOAT_AMPLITUDE;
+      const floatOffset = Math.sin(Date.now() * CLOUD_FLOAT_FREQUENCY) * CLOUD_FLOAT_AMPLITUDE;
       const cloudCanvasX = currentCloudXRef.current + floatOffset;
       const cloudCanvasY = height * 0.2;
 
@@ -498,7 +541,7 @@ export default function WeatherEngine() {
         }
         const drop = raindrops[i];
         drop.y += drop.fallSpeed;
-        drop.x += wind * (isStormWind ? 5.5 : 1.6);
+        drop.x += wind * (isStormWind ? 3.2 : 0.9);
 
         const outOfBounds = drop.x < -30 || drop.x > width + 30;
         const hitTarget = drop.y >= drop.targetY;
@@ -514,7 +557,7 @@ export default function WeatherEngine() {
         }
 
         ctx.globalAlpha = drop.opacity * Math.min(1, current.rain.intensity);
-        const windTilt = isStormWind ? 9 : 5;
+        const windTilt = isStormWind ? 6 : 3.5;
         ctx.beginPath();
         ctx.moveTo(drop.x, drop.y);
         ctx.lineTo(drop.x - wind * windTilt, drop.y - drop.length * (isStormWind ? 1.25 : 1.15));
@@ -525,8 +568,8 @@ export default function WeatherEngine() {
 
       for (let i = ripples.length - 1; i >= 0; i--) {
         const ripple = ripples[i];
-        ripple.radius += (ripple.maxRadius - ripple.radius) * 0.03 + 0.1;
-        ripple.opacity -= 0.003;
+        ripple.radius += (ripple.maxRadius - ripple.radius) * ripple.spreadRate + 0.05;
+        ripple.opacity -= ripple.spreadRate > RIPPLE_BASE_SPREAD * 2 ? 0.0035 : 0.002;
 
         if (ripple.opacity <= 0 || ripple.radius >= ripple.maxRadius * 1.8) {
           ripples.splice(i, 1);
@@ -542,7 +585,7 @@ export default function WeatherEngine() {
       ctx.globalAlpha = 1;
 
       if (currentMistOpacity > 0.01) {
-        mistPhase += 0.003;
+        mistPhase += 0.0015;
         const gradient = ctx.createLinearGradient(
           width * (0.2 + Math.sin(mistPhase) * 0.08),
           0,

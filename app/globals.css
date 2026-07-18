@@ -21,22 +21,22 @@ body {
   }
 }
 
-/* 命中真实波纹后浮现的短句：8 秒内向上漂浮 60px，前 1 秒淡入，中间 4 秒保持，后 3 秒极慢淡出。 */
+/* 命中真实波纹后浮现的短句：11 秒内向上漂浮，整体节奏更缓。 */
 @keyframes ripple-float-up {
   0% {
     opacity: 0;
     transform: translate(-50%, -50%);
   }
-  12.5% {
+  14% {
     opacity: 0.9;
-    transform: translate(-50%, calc(-50% - 8px));
+    transform: translate(-50%, calc(-50% - 6px));
   }
-  62.5% {
+  64% {
     opacity: 0.9;
-    transform: translate(-50%, calc(-50% - 45px));
+    transform: translate(-50%, calc(-50% - 38px));
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, calc(-50% - 60px));
+    transform: translate(-50%, calc(-50% - 52px));
   }
 }

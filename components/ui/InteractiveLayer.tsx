@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useWeatherStore } from "@/store/useWeatherStore";
 
 const SERIF_FONT = '"Noto Serif SC", "Songti SC", "SimSun", serif';
-const RIPPLE_TEXT_DURATION_MS = 8000;
+const RIPPLE_TEXT_DURATION_MS = 11000;
 
 const EXTEND_RIPPLE_PROMPT =
-  "用户希望在这场雨里多待一会儿。请为这场雨生成一套全新的三阶段波纹回应。";
+  "用户希望在这场雨里多待一会儿。请为这场雨生成一套全新的三阶段波纹回应。措辞须即兴创作，不可套用常见例句，与之前的回应完全不同。";
 
 interface FloatingRipple {
   id: string;
@@ -136,11 +136,11 @@ export default function InteractiveLayer() {
               style={{
                 fontFamily: SERIF_FONT,
                 left: menuAnchor.x,
-                top: menuAnchor.y - menuAnchor.radius - 20,
+                top: menuAnchor.y - menuAnchor.radius + 28,
                 textShadow: "0 1px 12px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 0, 0, 0.3)",
                 animation: "fade-in-slow 2s ease-out forwards",
               }}
-              className="pointer-events-none fixed w-[85vw] max-w-xs -translate-x-1/2 -translate-y-full text-center text-sm font-serif tracking-[0.2em] text-white/80 opacity-0 md:max-w-sm md:text-base md:tracking-[0.25em]"
+              className="pointer-events-none fixed w-[85vw] max-w-sm -translate-x-1/2 -translate-y-1/2 text-center text-base font-serif font-semibold tracking-[0.2em] text-white/85 opacity-0 md:max-w-md md:text-lg md:tracking-[0.25em]"
             >
               {cloudMsg}
             </p>
@@ -184,7 +184,7 @@ export default function InteractiveLayer() {
             fontFamily: SERIF_FONT,
             left: item.x,
             top: item.y,
-            animation: "ripple-float-up 8s ease-out forwards",
+            animation: "ripple-float-up 11s ease-out forwards",
           }}
           className="pointer-events-none fixed max-w-[80vw] -translate-x-1/2 text-base font-serif tracking-[0.15em] text-white/90 md:max-w-none md:text-lg md:tracking-[0.2em] md:text-xl"
         >
