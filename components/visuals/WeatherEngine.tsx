@@ -20,6 +20,16 @@ const EMBRYO_CLOUD_COLOR = "255, 255, 255";
 const EMBRYO_CLOUD_PRESENCE = 0.12;
 const PENDING_DISSOLVE_LERP = 0.035;
 const PENDING_WIND_BOOST = 0.2;
+const CLOUD_X_MIN_RATIO = 0.2;
+const CLOUD_X_MAX_RATIO = 0.8;
+
+const CLOUD_FLOAT_AMPLITUDE = 20;
+const CLOUD_LEAVE_SPEED = 2.0;
+const CLOUD_DISSIPATE_RATE = 0.002;
+
+function randomCloudX(canvasWidth: number): number {
+  return canvasWidth * CLOUD_X_MIN_RATIO + Math.random() * canvasWidth * (CLOUD_X_MAX_RATIO - CLOUD_X_MIN_RATIO);
+}
 
 interface RainDrop {
   x: number;
@@ -87,18 +97,74 @@ function getCloudAlpha(weather: WeatherType): number {
 
 export default function WeatherEngine() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const currentCloudXRef = useRef(
-    typeof window !== "undefined" ? window.innerWidth + 300 : 300,
+  const targetCloudXRef = useRef(
+    typeof window !== "undefined" ? randomCloudX(window.innerWidth) : 400,
   );
+  const currentCloudXRef = useRef(targetCloudXRef.current);
+  const currentCloudOpacityRef = useRef(0);
+
+  const hasStarted = useWeatherStore((s) => s.hasStarted);
+  const isWeatherPending = useWeatherStore((s) => s.isWeatherPending);
+  const isLeaving = useWeatherStore((s) => s.isLeaving);
+  const isDissipating = useWeatherStore((s) => s.isDissipating);
+  const extendCount = useWeatherStore((s) => s.extendCount);
+  const isWeatherExtended = useWeatherStore((s) => s.isWeatherExtended);
+  const targetWeather = useWeatherStore((s) => s.targetWeather);
+  const rippleReadIndex = useWeatherStore((s) => s.rippleReadIndex);
+  const cloudSpawnKey = useWeatherStore((s) => s.cloudSpawnKey);
 
   useEffect(() => {
     const unsub = useWeatherStore.subscribe((state, prevState) => {
       if (state.cloudSpawnKey > 0 && state.cloudSpawnKey !== prevState.cloudSpawnKey) {
-        currentCloudXRef.current = window.innerWidth + 300;
+        targetCloudXRef.current = randomCloudX(window.innerWidth);
+        currentCloudXRef.current = targetCloudXRef.current;
+        currentCloudOpacityRef.current = 0;
       }
     });
     return unsub;
   }, []);
+
+  /** 云朵离场生命周期：加时 3 分钟消散；否则无雨 20s 飘走 / 有雨读完后 10s 消散 / 未读完 120s 飘走。 */
+  useEffect(() => {
+    if (!hasStarted || isWeatherPending || isLeaving || isDissipating) return;
+
+    const isRaining = targetWeather.rain.intensity > 0;
+    const totalSpeeches = targetWeather.messages.rippleMsgs.length;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    if (isWeatherExtended) {
+      timer = setTimeout(() => {
+        useWeatherStore.getState().triggerDissipate();
+      }, 180000);
+    } else if (!isRaining) {
+      timer = setTimeout(() => {
+        useWeatherStore.getState().triggerLeave();
+      }, 20000);
+    } else if (rippleReadIndex >= totalSpeeches && totalSpeeches > 0) {
+      timer = setTimeout(() => {
+        useWeatherStore.getState().triggerDissipate();
+      }, 10000);
+    } else {
+      timer = setTimeout(() => {
+        useWeatherStore.getState().triggerLeave();
+      }, 120000);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [
+    hasStarted,
+    isWeatherPending,
+    isLeaving,
+    isDissipating,
+    targetWeather,
+    rippleReadIndex,
+    cloudSpawnKey,
+    isWeatherExtended,
+    extendCount,
+  ]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -175,17 +241,18 @@ export default function WeatherEngine() {
       if (!state.hasStarted && !state.isWeatherPending) return;
 
       const baseY = canvas.height * 0.2;
-      const currentCloudX = currentCloudXRef.current;
+      const floatOffset = Math.sin(Date.now() * 0.001) * CLOUD_FLOAT_AMPLITUDE;
+      const cloudX = currentCloudXRef.current + floatOffset;
       const target = useWeatherStore.getState().targetWeather;
       const dry = isDryCloud(target.weather, current.rain.intensity);
       const cloudRadius = getCloudBaseRadius(canvas.width, current.cloud.density, dry);
 
-      const dx = clickX - currentCloudX;
+      const dx = clickX - cloudX;
       const dy = clickY - baseY;
       const isHitCloud = (dx * dx) / (2.5 * 2.5) + dy * dy < cloudRadius * cloudRadius;
 
       if (isHitCloud) {
-        state.setCloudActive(true);
+        state.setCloudInteractState("menu");
         return;
       }
 
@@ -193,18 +260,24 @@ export default function WeatherEngine() {
         const ripple = ripples[i];
         const distance = Math.hypot(ripple.x - clickX, ripple.y - clickY);
         if (distance < ripple.maxRadius) {
-          if (Math.random() < 0.1) {
-            spawnRipple(clickX, clickY, 20);
-            state.setCloudActive(false);
+          const speeches = state.targetWeather.messages.rippleMsgs;
+          const index = state.rippleReadIndex;
+
+          if (index < speeches.length) {
+            const text = speeches[index];
+            state.incrementRippleReadIndex();
+            state.triggerRippleMessage(event.clientX, event.clientY, text);
           } else {
-            state.triggerRippleMessage(event.clientX, event.clientY);
+            spawnRipple(clickX, clickY, 14 + Math.random() * 8);
+            // 叙事读尽后的沉默；可按需开启：if (index === speeches.length) state.triggerDissipate();
           }
+
           ripples.splice(i, 1);
           return;
         }
       }
 
-      state.setCloudActive(false);
+      state.setCloudInteractState("idle");
     };
 
     canvas.addEventListener("pointerdown", handleCanvasClick);
@@ -212,14 +285,41 @@ export default function WeatherEngine() {
     let frameId = 0;
 
     const tick = () => {
-      const { targetWeather: target, hasStarted, isWeatherPending } =
-        useWeatherStore.getState();
+      const {
+        targetWeather: target,
+        hasStarted,
+        isWeatherPending,
+        isDissipating,
+        isLeaving,
+      } = useWeatherStore.getState();
+
+      if (isLeaving) {
+        currentCloudXRef.current -= CLOUD_LEAVE_SPEED;
+      } else {
+        currentCloudXRef.current = targetCloudXRef.current;
+      }
 
       const dissolveLerp = isWeatherPending ? PENDING_DISSOLVE_LERP : EFFECT_LERP;
       const rainTarget = isWeatherPending ? 0 : target.rain.intensity;
       const windTarget = isWeatherPending
         ? Math.min(1, Math.max(target.environment.wind, current.environment.wind) + PENDING_WIND_BOOST)
         : target.environment.wind;
+
+      let cloudOpacity = currentCloudOpacityRef.current;
+
+      if (isDissipating) {
+        cloudOpacity -= CLOUD_DISSIPATE_RATE;
+        if (cloudOpacity < 0) cloudOpacity = 0;
+      } else if (isWeatherPending) {
+        cloudOpacity += (0.8 - cloudOpacity) * 0.01;
+      } else if (hasStarted) {
+        cloudOpacity += (1.0 - cloudOpacity) * 0.01;
+      }
+
+      currentCloudOpacityRef.current = cloudOpacity;
+      useWeatherStore.setState({ cloudOpacity });
+
+      const cloudVisible = cloudOpacity > 0.01;
 
       current.cloud.color = lerpColor(
         current.cloud.color,
@@ -250,21 +350,7 @@ export default function WeatherEngine() {
         : getCloudAlpha(target.weather);
       currentCloudPresence += (targetCloudPresence - currentCloudPresence) * (isWeatherPending ? 0.025 : EFFECT_LERP);
 
-      const shouldAnimateCloud = hasStarted || isWeatherPending;
-
-      if (shouldAnimateCloud) {
-        let moveSpeed = isWeatherPending
-          ? 0.06
-          : 0.18 + current.cloud.speed * 0.32;
-        const canvasWidth = canvas.width;
-        const entryThreshold = canvasWidth - canvasWidth * 0.2;
-
-        if (!isWeatherPending && currentCloudXRef.current > entryThreshold) {
-          moveSpeed += (currentCloudXRef.current - entryThreshold) * 0.003;
-        }
-
-        currentCloudXRef.current -= moveSpeed;
-      }
+      const shouldAnimateCloud = (hasStarted || isWeatherPending) && cloudVisible;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -274,7 +360,8 @@ export default function WeatherEngine() {
         const cloudColor = current.cloud.color;
         const density = current.cloud.density;
         const baseY = canvas.height * 0.2;
-        const baseX = currentCloudXRef.current;
+        const floatOffset = Math.sin(Date.now() * 0.001) * CLOUD_FLOAT_AMPLITUDE;
+        const baseX = currentCloudXRef.current + floatOffset;
         const dry = isDryCloud(target.weather, current.rain.intensity);
         const baseRadius = getCloudBaseRadius(canvas.width, density, dry && !isWeatherPending);
         const windStretch = 1 + Math.abs(wind) * 0.8;
@@ -294,7 +381,7 @@ export default function WeatherEngine() {
           const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
           const cloudAlpha = Math.min(
             1,
-            alphaMultiplier * currentCloudPresence * CLOUD_OPACITY_SCALE,
+            alphaMultiplier * currentCloudPresence * CLOUD_OPACITY_SCALE * cloudOpacity,
           );
           gradient.addColorStop(0, `rgba(${cloudColor}, ${0.92 * cloudAlpha})`);
           gradient.addColorStop(0.4, `rgba(${cloudColor}, ${0.62 * cloudAlpha})`);
@@ -312,12 +399,7 @@ export default function WeatherEngine() {
         drawCloudPuff(-baseRadius * 0.8, -10, baseRadius * 0.7, 1.5 * windStretch, 0.5 + density * 0.1, 0.8);
         drawCloudPuff(baseRadius * 0.9, 15, baseRadius * 0.85, 1.6 * windStretch, 0.35 + density * 0.2, 0.9);
 
-        const cloudOffScreen = baseX + baseRadius * 2.5 < 0;
-        if (cloudOffScreen && useWeatherStore.getState().isCloudActive) {
-          useWeatherStore.getState().setCloudActive(false);
-        }
-
-        if (current.rain.intensity > 0.01 && !isWeatherPending) {
+        if (current.rain.intensity > 0.01 && !isWeatherPending && !isDissipating) {
           const intensity = current.rain.intensity;
           const isStorm = target.weather === "thunderstorm" || currentLightningChance > 0.003;
           let dropsToSpawn = 0;
@@ -353,8 +435,13 @@ export default function WeatherEngine() {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
 
       const isStormWind = currentLightningChance > 0.003;
+      const shouldDrawRain = cloudVisible && !isDissipating;
 
       for (let i = raindrops.length - 1; i >= 0; i--) {
+        if (!shouldDrawRain) {
+          raindrops.splice(i, 1);
+          continue;
+        }
         const drop = raindrops[i];
         drop.y += drop.fallSpeed;
         drop.x += wind * (isStormWind ? 5.5 : 1.6);

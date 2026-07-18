@@ -7,7 +7,7 @@ import { useWeatherStore } from "@/store/useWeatherStore";
 const UI_COPY = {
   bilingual: {
     idle: "今天，想落下一句话吗？ / A line for today?",
-    cloudActive: "我想要一场... / I'd like...",
+    cloudActive: "想要换一种天气吗... / Whisper a new weather...",
     sending: "云正在聚集... / Cloud is gathering...",
   },
   zh: {
@@ -17,7 +17,7 @@ const UI_COPY = {
   },
   en: {
     idle: "A line for today?",
-    cloudActive: "I'd like...",
+    cloudActive: "Whisper a new weather...",
     sending: "Cloud is gathering...",
   },
 } as const;
@@ -39,29 +39,31 @@ export default function ThoughtInput() {
   const [sendingLanguage, setSendingLanguage] = useState<InputLanguage | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const isCloudActive = useWeatherStore((state) => state.isCloudActive);
+  const cloudInteractState = useWeatherStore((state) => state.cloudInteractState);
   const setTargetWeather = useWeatherStore((state) => state.setTargetWeather);
-  const setCloudActive = useWeatherStore((state) => state.setCloudActive);
+  const setCloudInteractState = useWeatherStore((state) => state.setCloudInteractState);
   const beginWeatherRequest = useWeatherStore((state) => state.beginWeatherRequest);
   const endWeatherRequest = useWeatherStore((state) => state.endWeatherRequest);
 
+  const isInputMode = cloudInteractState === "input";
+
   useEffect(() => {
-    if (isCloudActive) {
+    if (isInputMode) {
       inputRef.current?.focus();
     }
-  }, [isCloudActive]);
+  }, [isInputMode]);
 
   const uiLanguage = resolveUiLanguage(text, sendingLanguage);
   const copy = UI_COPY[uiLanguage];
 
   const displayValue = isSending ? copy.sending : text;
-  const placeholder = isCloudActive ? copy.cloudActive : copy.idle;
+  const placeholder = isInputMode ? copy.cloudActive : copy.idle;
 
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed || isSending) return;
 
-    const isModification = useWeatherStore.getState().isCloudActive;
+    const isModification = useWeatherStore.getState().cloudInteractState === "input";
     const language = detectInputLanguage(trimmed);
     setSendingLanguage(language);
     setIsSending(true);
@@ -99,7 +101,7 @@ export default function ThoughtInput() {
 
       console.log("收到天气数据:", data);
       setTargetWeather(data as Parameters<typeof setTargetWeather>[0], isModification);
-      setCloudActive(false);
+      setCloudInteractState("idle");
       succeeded = true;
     } catch (error) {
       console.error("提交失败:", error);

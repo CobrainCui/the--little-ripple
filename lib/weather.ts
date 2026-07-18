@@ -100,9 +100,9 @@ export function sanitizeRippleMsgs(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    .map((item) => item.trim().slice(0, 20))
+    .map((item) => item.trim().slice(0, 30))
     .filter((item) => !isMeaninglessRipple(item))
-    .slice(0, 10);
+    .slice(0, 8);
 }
 
 /** 将大模型返回的新格式映射为引擎可用的 WeatherState。 */

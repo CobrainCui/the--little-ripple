@@ -1,3 +1,4 @@
+import { sanitizeRippleMsgs } from "@/lib/weather";
 import { create } from "zustand";
 import {
   addBackgroundToStorage,
@@ -72,14 +73,32 @@ export const defaultWeatherState: WeatherState = {
   },
 };
 
+export type CloudInteractState = "idle" | "menu" | "input";
+
 interface WeatherStore {
   targetWeather: WeatherState;
   bgImage: string | null;
   savedBackgrounds: SavedBackground[];
   activeBackgroundId: string | null;
 
-  isCloudActive: boolean;
-  lastRippleHit: { x: number; y: number; id: string } | null;
+  cloudInteractState: CloudInteractState;
+  setCloudInteractState: (state: CloudInteractState) => void;
+
+  isWeatherExtended: boolean;
+  extendCount: number;
+  extendWeatherTimer: () => void;
+  updateRippleSpeeches: (newSpeeches: string[]) => void;
+
+  lastRippleHit: { x: number; y: number; id: string; text: string } | null;
+
+  rippleReadIndex: number;
+  incrementRippleReadIndex: () => void;
+
+  cloudOpacity: number;
+  isDissipating: boolean;
+  triggerDissipate: () => void;
+  isLeaving: boolean;
+  triggerLeave: () => void;
 
   hasStarted: boolean;
   cloudSpawnKey: number;
@@ -96,8 +115,7 @@ interface WeatherStore {
 
   setTargetWeather: (target: Partial<WeatherState>, isModification?: boolean) => void;
   resetWeather: () => void;
-  setCloudActive: (active: boolean) => void;
-  triggerRippleMessage: (x: number, y: number) => void;
+  triggerRippleMessage: (x: number, y: number, text: string) => void;
 
   loadSavedBackgrounds: () => Promise<void>;
   addBackground: (dataUrl: string) => Promise<void>;
@@ -110,8 +128,14 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
   bgImage: null,
   savedBackgrounds: [],
   activeBackgroundId: null,
-  isCloudActive: false,
+  cloudInteractState: "idle",
+  isWeatherExtended: false,
+  extendCount: 0,
   lastRippleHit: null,
+  rippleReadIndex: 0,
+  cloudOpacity: 0,
+  isDissipating: false,
+  isLeaving: false,
   hasStarted: false,
   cloudSpawnKey: 0,
   showTutorial: true,
@@ -146,6 +170,12 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
     set({
       isWeatherPending: false,
       hasStarted: true,
+      rippleReadIndex: 0,
+      isDissipating: false,
+      isLeaving: false,
+      isWeatherExtended: false,
+      extendCount: 0,
+      cloudInteractState: "idle",
       cloudSpawnKey: isModification || wasPending ? get().cloudSpawnKey : Date.now(),
       targetWeather: {
         weather: partial.weather ?? prevTarget.weather,
@@ -160,19 +190,60 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
   resetWeather: () => {
     set({
       targetWeather: defaultWeatherState,
-      isCloudActive: false,
+      cloudInteractState: "idle",
+      isWeatherExtended: false,
+      extendCount: 0,
       isWeatherPending: false,
+      rippleReadIndex: 0,
+      isDissipating: false,
+      isLeaving: false,
+      cloudOpacity: 0,
     });
   },
 
-  setCloudActive: (active) => {
-    set({ isCloudActive: active });
+  setCloudInteractState: (state) => {
+    set({ cloudInteractState: state });
   },
 
-  triggerRippleMessage: (x, y) => {
+  extendWeatherTimer: () => {
     set({
-      isCloudActive: false,
-      lastRippleHit: { x, y, id: crypto.randomUUID() },
+      isWeatherExtended: true,
+      extendCount: get().extendCount + 1,
+    });
+  },
+
+  updateRippleSpeeches: (newSpeeches) => {
+    const rippleMsgs = sanitizeRippleMsgs(newSpeeches);
+    if (rippleMsgs.length === 0) return;
+
+    set((state) => ({
+      rippleReadIndex: 0,
+      targetWeather: {
+        ...state.targetWeather,
+        messages: {
+          ...state.targetWeather.messages,
+          rippleMsgs,
+        },
+      },
+    }));
+  },
+
+  incrementRippleReadIndex: () => {
+    set({ rippleReadIndex: get().rippleReadIndex + 1 });
+  },
+
+  triggerDissipate: () => {
+    set({ isDissipating: true });
+  },
+
+  triggerLeave: () => {
+    set({ isLeaving: true });
+  },
+
+  triggerRippleMessage: (x, y, text) => {
+    set({
+      cloudInteractState: "idle",
+      lastRippleHit: { x, y, id: crypto.randomUUID(), text },
     });
   },
 
