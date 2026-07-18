@@ -136,21 +136,21 @@ export default function InteractiveLayer() {
               style={{
                 fontFamily: SERIF_FONT,
                 left: menuAnchor.x,
-                top: menuAnchor.y - menuAnchor.radius + 54,
+                top: menuAnchor.y - menuAnchor.radius * 0.35,
                 textShadow: "0 1px 12px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 0, 0, 0.3)",
                 animation: "fade-in-slow 2s ease-out forwards",
               }}
-              className="pointer-events-none fixed w-[85vw] max-w-sm -translate-x-1/2 -translate-y-1/2 text-center text-base font-serif font-semibold tracking-[0.2em] text-white/85 opacity-0 md:max-w-md md:text-lg md:tracking-[0.25em]"
+              className="pointer-events-none fixed w-[85vw] max-w-sm -translate-x-1/2 -translate-y-full text-center text-base font-serif font-semibold tracking-[0.2em] text-white/85 opacity-0 md:max-w-md md:text-lg md:tracking-[0.25em]"
             >
               {cloudMsg}
             </p>
           )}
 
           <div
-            className="pointer-events-auto fixed flex flex-col items-center space-y-5 md:space-y-6"
+            className="pointer-events-auto fixed flex flex-col items-center space-y-4 md:space-y-5"
             style={{
               left: menuAnchor.x,
-              top: menuAnchor.y + menuAnchor.radius - 10,
+              top: menuAnchor.y + menuAnchor.radius * 0.22,
               transform: "translateX(-50%)",
               animation: "fade-in-slow 2.5s ease-out 0.4s forwards",
               opacity: 0,
