@@ -7,20 +7,20 @@ const SERIF_FONT = '"Noto Serif SC", "Songti SC", "SimSun", serif';
 
 const TUTORIAL_LINES = [
   {
-    zh: "1. 在底部输入一句话，世界会为你降下一场天气。",
-    en: "1. Type a line at the bottom — the world will bring you weather.",
+    zh: "1. 在底部写下一句话，天空会为你凝聚一场专属的天气。",
+    en: "1. Write a line at the bottom — the sky will gather a weather just for you.",
   },
   {
-    zh: "2. 试着点击飘过的云朵，或者水面上荡开的波纹。",
-    en: "2. Try tapping the drifting cloud, or ripples on the water.",
+    zh: "2. 触碰水面的波纹，倾听它的渐次回应；触碰云朵，可以挽留它或改变天气。",
+    en: "2. Touch ripples on the water for its unfolding replies; touch the cloud to linger or change the weather.",
   },
   {
-    zh: "3. 右下角可更换背景，左下角可递出一封信。",
-    en: "3. Change the background at bottom-right; leave a letter at bottom-left.",
+    zh: "3. 右下角可更换风景，左下角可向造物主递出一封信。",
+    en: "3. Change the landscape at bottom-right; send a letter to the maker at bottom-left.",
   },
 ] as const;
 
-const LINE_INTERVAL_MS = 1200;
+const LINE_INTERVAL_MS = 1500;
 const ENTER_BUTTON_DELAY_MS = 1000;
 
 /**
@@ -83,10 +83,10 @@ export default function TutorialOverlay() {
               revealedCount > index ? "opacity-100" : "opacity-0"
             }`}
           >
-            <p className="text-lg leading-relaxed tracking-wide text-white/80 md:text-xl">
+            <p className="text-lg leading-relaxed tracking-wider text-white/80 md:text-xl">
               {line.zh}
             </p>
-            <p className="mt-2 text-base leading-relaxed tracking-normal text-white/45 md:text-lg">
+            <p className="mt-2 text-base leading-relaxed tracking-wider text-white/45 md:text-lg">
               {line.en}
             </p>
           </div>
@@ -95,7 +95,7 @@ export default function TutorialOverlay() {
         <button
           type="button"
           onClick={closeTutorial}
-          className={`mx-auto mt-2 cursor-pointer border-b border-white/20 pb-1 text-base tracking-wide transition-opacity duration-700 ease-out hover:text-white md:text-lg ${
+          className={`mx-auto mt-2 cursor-pointer border-b border-white/20 pb-1 text-base tracking-wider transition-opacity duration-700 ease-out hover:text-white md:text-lg ${
             showEnter ? "text-white/70 opacity-100" : "pointer-events-none text-white/70 opacity-0"
           }`}
         >

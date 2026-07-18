@@ -95,6 +95,7 @@ interface WeatherStore {
   incrementRippleReadIndex: () => void;
 
   cloudOpacity: number;
+  cloudAnchor: { x: number; y: number; radius: number } | null;
   isDissipating: boolean;
   triggerDissipate: () => void;
   isLeaving: boolean;
@@ -110,6 +111,7 @@ interface WeatherStore {
   setWritingLetter: (isWriting: boolean) => void;
 
   isWeatherPending: boolean;
+  weatherPendingSince: number | null;
   beginWeatherRequest: (isModification?: boolean) => void;
   endWeatherRequest: () => void;
 
@@ -134,6 +136,7 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
   lastRippleHit: null,
   rippleReadIndex: 0,
   cloudOpacity: 0,
+  cloudAnchor: null,
   isDissipating: false,
   isLeaving: false,
   hasStarted: false,
@@ -151,17 +154,19 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
   },
 
   isWeatherPending: false,
+  weatherPendingSince: null,
 
   beginWeatherRequest: (isModification = false) => {
     set({
       isWeatherPending: true,
+      weatherPendingSince: Date.now(),
       hasStarted: true,
       cloudSpawnKey: isModification ? get().cloudSpawnKey : Date.now(),
     });
   },
 
   endWeatherRequest: () => {
-    set({ isWeatherPending: false });
+    set({ isWeatherPending: false, weatherPendingSince: null });
   },
 
   setTargetWeather: (partial, isModification = false) => {
@@ -169,6 +174,7 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
     const wasPending = get().isWeatherPending;
     set({
       isWeatherPending: false,
+      weatherPendingSince: null,
       hasStarted: true,
       rippleReadIndex: 0,
       isDissipating: false,
@@ -194,6 +200,7 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
       isWeatherExtended: false,
       extendCount: 0,
       isWeatherPending: false,
+      weatherPendingSince: null,
       rippleReadIndex: 0,
       isDissipating: false,
       isLeaving: false,

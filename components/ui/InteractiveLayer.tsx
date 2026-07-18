@@ -16,6 +16,12 @@ interface FloatingRipple {
   text: string;
 }
 
+interface CloudAnchor {
+  x: number;
+  y: number;
+  radius: number;
+}
+
 function extractRippleSpeeches(data: unknown): string[] | null {
   if (!data || typeof data !== "object") return null;
 
@@ -35,13 +41,31 @@ function extractRippleSpeeches(data: unknown): string[] | null {
 export default function InteractiveLayer() {
   const [floatingRipples, setFloatingRipples] = useState<FloatingRipple[]>([]);
   const [isGatheringRipples, setIsGatheringRipples] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<CloudAnchor | null>(null);
 
   const cloudMsg = useWeatherStore((state) => state.targetWeather.messages.cloudMsg);
   const cloudInteractState = useWeatherStore((state) => state.cloudInteractState);
   const setCloudInteractState = useWeatherStore((state) => state.setCloudInteractState);
   const lastRippleHit = useWeatherStore((state) => state.lastRippleHit);
-  const hasStarted = useWeatherStore((state) => state.hasStarted);
-  const isWeatherPending = useWeatherStore((state) => state.isWeatherPending);
+
+  useEffect(() => {
+    if (cloudInteractState !== "menu") {
+      setMenuAnchor(null);
+      return;
+    }
+
+    let frameId = 0;
+    const followCloud = () => {
+      const anchor = useWeatherStore.getState().cloudAnchor;
+      if (anchor) {
+        setMenuAnchor(anchor);
+      }
+      frameId = requestAnimationFrame(followCloud);
+    };
+
+    frameId = requestAnimationFrame(followCloud);
+    return () => cancelAnimationFrame(frameId);
+  }, [cloudInteractState]);
 
   useEffect(() => {
     if (!lastRippleHit) return;
@@ -90,12 +114,6 @@ export default function InteractiveLayer() {
     }
   }, [setCloudInteractState]);
 
-  const showCloudWhisper =
-    cloudMsg &&
-    hasStarted &&
-    !isWeatherPending &&
-    cloudInteractState === "idle";
-
   return (
     <div className="pointer-events-none fixed inset-0 z-20">
       {isGatheringRipples && (
@@ -110,39 +128,33 @@ export default function InteractiveLayer() {
         </p>
       )}
 
-      {/* 云刚成形时，悄悄话微弱悬浮于天空 */}
-      {showCloudWhisper && (
-        <p
-          style={{
-            fontFamily: SERIF_FONT,
-            textShadow: "0 1px 12px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 0, 0, 0.25)",
-            animation: "fade-in-slow 4s ease-out forwards",
-          }}
-          className="fixed left-1/2 top-[18%] w-[85vw] max-w-sm -translate-x-1/2 text-center text-sm font-serif tracking-[0.2em] text-white/50 opacity-0 md:top-[20%] md:text-base md:tracking-[0.25em]"
-        >
-          {cloudMsg}
-        </p>
-      )}
-
-      {/* 点击云后：云的话作标题，下方两行诗般的选项 */}
-      {cloudInteractState === "menu" && (
-        <div className="pointer-events-auto fixed left-1/2 top-32 z-50 w-[85vw] max-w-xs -translate-x-1/2 md:top-36 md:max-w-sm">
+      {/* 点击云后：描述语在云正上方，选项在云正下方，随云漂移 */}
+      {cloudInteractState === "menu" && menuAnchor && (
+        <>
           {cloudMsg && (
             <p
               style={{
                 fontFamily: SERIF_FONT,
+                left: menuAnchor.x,
+                top: menuAnchor.y - menuAnchor.radius - 20,
                 textShadow: "0 1px 12px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 0, 0, 0.3)",
-                animation: "fade-in-slow 2.5s ease-out forwards",
+                animation: "fade-in-slow 2s ease-out forwards",
               }}
-              className="mb-10 text-center text-base font-serif tracking-[0.2em] text-white/75 opacity-0 md:mb-12 md:text-lg md:tracking-[0.25em]"
+              className="pointer-events-none fixed w-[85vw] max-w-xs -translate-x-1/2 -translate-y-full text-center text-sm font-serif tracking-[0.2em] text-white/80 opacity-0 md:max-w-sm md:text-base md:tracking-[0.25em]"
             >
               {cloudMsg}
             </p>
           )}
 
           <div
-            className="flex flex-col items-center space-y-6 opacity-0 md:space-y-7"
-            style={{ animation: "fade-in-slow 3s ease-out 0.6s forwards" }}
+            className="pointer-events-auto fixed flex flex-col items-center space-y-5 md:space-y-6"
+            style={{
+              left: menuAnchor.x,
+              top: menuAnchor.y + menuAnchor.radius + 16,
+              transform: "translateX(-50%)",
+              animation: "fade-in-slow 2.5s ease-out 0.4s forwards",
+              opacity: 0,
+            }}
           >
             <button
               type="button"
@@ -161,7 +173,7 @@ export default function InteractiveLayer() {
               和天气说一句话
             </button>
           </div>
-        </div>
+        </>
       )}
 
       {/* 命中真实波纹后浮现的短句：8 秒内向上漂浮 60px */}

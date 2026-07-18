@@ -24,8 +24,12 @@ const CLOUD_X_MIN_RATIO = 0.2;
 const CLOUD_X_MAX_RATIO = 0.8;
 
 const CLOUD_FLOAT_AMPLITUDE = 20;
-const CLOUD_LEAVE_SPEED = 2.0;
+const CLOUD_LEAVE_SPEED = 0.65;
 const CLOUD_DISSIPATE_RATE = 0.002;
+const CLOUD_DRIFT_SPEED = 0.22;
+const CLOUD_BOUNCE_MIN_RATIO = 0.14;
+const CLOUD_BOUNCE_MAX_RATIO = 0.86;
+const PENDING_GATHER_DELAY_MS = 1000;
 
 function randomCloudX(canvasWidth: number): number {
   return canvasWidth * CLOUD_X_MIN_RATIO + Math.random() * canvasWidth * (CLOUD_X_MAX_RATIO - CLOUD_X_MIN_RATIO);
@@ -102,6 +106,7 @@ export default function WeatherEngine() {
   );
   const currentCloudXRef = useRef(targetCloudXRef.current);
   const currentCloudOpacityRef = useRef(0);
+  const cloudDriftVelocityRef = useRef(CLOUD_DRIFT_SPEED);
 
   const hasStarted = useWeatherStore((s) => s.hasStarted);
   const isWeatherPending = useWeatherStore((s) => s.isWeatherPending);
@@ -119,6 +124,7 @@ export default function WeatherEngine() {
         targetCloudXRef.current = randomCloudX(window.innerWidth);
         currentCloudXRef.current = targetCloudXRef.current;
         currentCloudOpacityRef.current = 0;
+        cloudDriftVelocityRef.current = Math.random() < 0.5 ? CLOUD_DRIFT_SPEED : -CLOUD_DRIFT_SPEED;
       }
     });
     return unsub;
@@ -240,6 +246,14 @@ export default function WeatherEngine() {
       const state = useWeatherStore.getState();
       if (!state.hasStarted && !state.isWeatherPending) return;
 
+      const pendingElapsed =
+        state.isWeatherPending && state.weatherPendingSince !== null
+          ? Date.now() - state.weatherPendingSince
+          : Infinity;
+      const canStartGathering =
+        !state.isWeatherPending || pendingElapsed >= PENDING_GATHER_DELAY_MS;
+      const cloudClickable = canStartGathering && state.cloudOpacity > 0.01;
+
       const baseY = canvas.height * 0.2;
       const floatOffset = Math.sin(Date.now() * 0.001) * CLOUD_FLOAT_AMPLITUDE;
       const cloudX = currentCloudXRef.current + floatOffset;
@@ -247,13 +261,15 @@ export default function WeatherEngine() {
       const dry = isDryCloud(target.weather, current.rain.intensity);
       const cloudRadius = getCloudBaseRadius(canvas.width, current.cloud.density, dry);
 
-      const dx = clickX - cloudX;
-      const dy = clickY - baseY;
-      const isHitCloud = (dx * dx) / (2.5 * 2.5) + dy * dy < cloudRadius * cloudRadius;
+      if (cloudClickable) {
+        const dx = clickX - cloudX;
+        const dy = clickY - baseY;
+        const isHitCloud = (dx * dx) / (2.5 * 2.5) + dy * dy < cloudRadius * cloudRadius;
 
-      if (isHitCloud) {
-        state.setCloudInteractState("menu");
-        return;
+        if (isHitCloud) {
+          state.setCloudInteractState("menu");
+          return;
+        }
       }
 
       for (let i = ripples.length - 1; i >= 0; i--) {
@@ -289,14 +305,35 @@ export default function WeatherEngine() {
         targetWeather: target,
         hasStarted,
         isWeatherPending,
+        weatherPendingSince,
         isDissipating,
         isLeaving,
       } = useWeatherStore.getState();
 
+      const pendingElapsed =
+        isWeatherPending && weatherPendingSince !== null
+          ? Date.now() - weatherPendingSince
+          : Infinity;
+      const canStartGathering = !isWeatherPending || pendingElapsed >= PENDING_GATHER_DELAY_MS;
+
+      const dry = isDryCloud(target.weather, current.rain.intensity);
+      const baseRadiusEstimate = getCloudBaseRadius(width, current.cloud.density, dry && !isWeatherPending);
+      const bounceMinX = width * CLOUD_BOUNCE_MIN_RATIO + baseRadiusEstimate * 0.45;
+      const bounceMaxX = width * CLOUD_BOUNCE_MAX_RATIO - baseRadiusEstimate * 0.45;
+
       if (isLeaving) {
-        currentCloudXRef.current -= CLOUD_LEAVE_SPEED;
-      } else {
-        currentCloudXRef.current = targetCloudXRef.current;
+        const leaveDir = cloudDriftVelocityRef.current >= 0 ? 1 : -1;
+        currentCloudXRef.current += leaveDir * CLOUD_LEAVE_SPEED;
+      } else if (!isWeatherPending && hasStarted && canStartGathering) {
+        currentCloudXRef.current += cloudDriftVelocityRef.current;
+
+        if (currentCloudXRef.current <= bounceMinX) {
+          currentCloudXRef.current = bounceMinX;
+          cloudDriftVelocityRef.current = Math.abs(cloudDriftVelocityRef.current);
+        } else if (currentCloudXRef.current >= bounceMaxX) {
+          currentCloudXRef.current = bounceMaxX;
+          cloudDriftVelocityRef.current = -Math.abs(cloudDriftVelocityRef.current);
+        }
       }
 
       const dissolveLerp = isWeatherPending ? PENDING_DISSOLVE_LERP : EFFECT_LERP;
@@ -310,16 +347,34 @@ export default function WeatherEngine() {
       if (isDissipating) {
         cloudOpacity -= CLOUD_DISSIPATE_RATE;
         if (cloudOpacity < 0) cloudOpacity = 0;
-      } else if (isWeatherPending) {
+      } else if (isWeatherPending && canStartGathering) {
         cloudOpacity += (0.8 - cloudOpacity) * 0.01;
-      } else if (hasStarted) {
+      } else if (hasStarted && !isWeatherPending) {
         cloudOpacity += (1.0 - cloudOpacity) * 0.01;
       }
 
       currentCloudOpacityRef.current = cloudOpacity;
-      useWeatherStore.setState({ cloudOpacity });
 
-      const cloudVisible = cloudOpacity > 0.01;
+      const floatOffset = Math.sin(Date.now() * 0.001) * CLOUD_FLOAT_AMPLITUDE;
+      const cloudCanvasX = currentCloudXRef.current + floatOffset;
+      const cloudCanvasY = height * 0.2;
+
+      const canvasRect = canvas.getBoundingClientRect();
+      const screenCloudX =
+        canvasRect.left + (cloudCanvasX / canvas.width) * canvasRect.width;
+      const screenCloudY =
+        canvasRect.top + (cloudCanvasY / canvas.height) * canvasRect.height;
+      const screenCloudRadius =
+        (baseRadiusEstimate / canvas.width) * canvasRect.width;
+
+      useWeatherStore.setState({
+        cloudOpacity,
+        cloudAnchor: canStartGathering && cloudOpacity > 0.01
+          ? { x: screenCloudX, y: screenCloudY, radius: screenCloudRadius }
+          : null,
+      });
+
+      const cloudVisible = cloudOpacity > 0.01 && canStartGathering;
 
       current.cloud.color = lerpColor(
         current.cloud.color,
@@ -350,7 +405,8 @@ export default function WeatherEngine() {
         : getCloudAlpha(target.weather);
       currentCloudPresence += (targetCloudPresence - currentCloudPresence) * (isWeatherPending ? 0.025 : EFFECT_LERP);
 
-      const shouldAnimateCloud = (hasStarted || isWeatherPending) && cloudVisible;
+      const shouldAnimateCloud =
+        (hasStarted || isWeatherPending) && cloudVisible && canStartGathering;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -359,11 +415,9 @@ export default function WeatherEngine() {
       if (shouldAnimateCloud && (currentCloudPresence > 0.05 || isWeatherPending)) {
         const cloudColor = current.cloud.color;
         const density = current.cloud.density;
-        const baseY = canvas.height * 0.2;
-        const floatOffset = Math.sin(Date.now() * 0.001) * CLOUD_FLOAT_AMPLITUDE;
-        const baseX = currentCloudXRef.current + floatOffset;
-        const dry = isDryCloud(target.weather, current.rain.intensity);
-        const baseRadius = getCloudBaseRadius(canvas.width, density, dry && !isWeatherPending);
+        const baseY = cloudCanvasY;
+        const baseX = cloudCanvasX;
+        const baseRadius = baseRadiusEstimate;
         const windStretch = 1 + Math.abs(wind) * 0.8;
 
         const drawCloudPuff = (
