@@ -215,6 +215,7 @@ export const useWeatherStore = create<WeatherStore>((set, get) => ({
   extendWeatherTimer: () => {
     set({
       isWeatherExtended: true,
+      isLeaving: false,
       extendCount: get().extendCount + 1,
     });
   },

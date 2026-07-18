@@ -136,7 +136,7 @@ export default function InteractiveLayer() {
               style={{
                 fontFamily: SERIF_FONT,
                 left: menuAnchor.x,
-                top: menuAnchor.y - menuAnchor.radius + 28,
+                top: menuAnchor.y - menuAnchor.radius + 54,
                 textShadow: "0 1px 12px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 0, 0, 0.3)",
                 animation: "fade-in-slow 2s ease-out forwards",
               }}
@@ -150,7 +150,7 @@ export default function InteractiveLayer() {
             className="pointer-events-auto fixed flex flex-col items-center space-y-5 md:space-y-6"
             style={{
               left: menuAnchor.x,
-              top: menuAnchor.y + menuAnchor.radius + 16,
+              top: menuAnchor.y + menuAnchor.radius - 10,
               transform: "translateX(-50%)",
               animation: "fade-in-slow 2.5s ease-out 0.4s forwards",
               opacity: 0,

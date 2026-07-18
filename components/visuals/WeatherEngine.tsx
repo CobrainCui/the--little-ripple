@@ -99,6 +99,11 @@ function getCloudBaseRadius(canvasWidth: number, density: number, dry: boolean):
   return dry ? base * DRY_CLOUD_SIZE_BOOST + DRY_CLOUD_BASE_EXTRA : base;
 }
 
+function getCloudHalfWidth(baseRadius: number, wind: number): number {
+  const windStretch = 1 + Math.abs(wind) * 0.8;
+  return baseRadius * 1.85 * windStretch + baseRadius * 0.4;
+}
+
 function getCloudAlpha(weather: WeatherType): number {
   if (weather === "clear") return 0.38;
   if (weather === "breeze") return 0.6;
@@ -351,6 +356,7 @@ export default function WeatherEngine() {
         weatherPendingSince,
         isDissipating,
         isLeaving,
+        isWeatherExtended,
       } = useWeatherStore.getState();
 
       const pendingElapsed =
@@ -361,6 +367,8 @@ export default function WeatherEngine() {
 
       const dry = isDryCloud(target.weather, current.rain.intensity);
       const baseRadiusEstimate = getCloudBaseRadius(width, current.cloud.density, dry && !isWeatherPending);
+      const windForBounds = current.environment.wind;
+      const cloudHalfWidth = getCloudHalfWidth(baseRadiusEstimate, windForBounds);
       const bounceMinX = width * CLOUD_BOUNCE_MIN_RATIO + baseRadiusEstimate * 0.45;
       const bounceMaxX = width * CLOUD_BOUNCE_MAX_RATIO - baseRadiusEstimate * 0.45;
 
@@ -370,7 +378,18 @@ export default function WeatherEngine() {
       } else if (!isWeatherPending && hasStarted && canStartGathering) {
         currentCloudXRef.current += cloudDriftVelocityRef.current;
 
-        if (currentCloudXRef.current <= bounceMinX) {
+        if (isWeatherExtended) {
+          const leftEdge = currentCloudXRef.current - cloudHalfWidth;
+          const rightEdge = currentCloudXRef.current + cloudHalfWidth;
+
+          if (leftEdge <= 0) {
+            currentCloudXRef.current = cloudHalfWidth;
+            cloudDriftVelocityRef.current = CLOUD_DRIFT_SPEED;
+          } else if (rightEdge >= width) {
+            currentCloudXRef.current = width - cloudHalfWidth;
+            cloudDriftVelocityRef.current = -CLOUD_DRIFT_SPEED;
+          }
+        } else if (currentCloudXRef.current <= bounceMinX) {
           currentCloudXRef.current = bounceMinX;
           cloudDriftVelocityRef.current = CLOUD_DRIFT_SPEED;
         } else if (currentCloudXRef.current >= bounceMaxX) {
