@@ -2,17 +2,18 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { fileToBase64 } from "@/lib/backgroundStorage";
+import { PRESET_BACKGROUNDS } from "@/lib/weatherIntent";
 import { useWeatherStore } from "@/store/useWeatherStore";
 
 const DEFAULT_BACKGROUNDS = [
-  { id: "default-night", dataUrl: "/backgrounds/night_lake.jpg" },
-  { id: "default-mountain", dataUrl: "/backgrounds/mountain_lake.jpg" },
-  { id: "default-forest", dataUrl: "/backgrounds/forest_lake.jpg" },
-  { id: "default-foggy", dataUrl: "/backgrounds/foggy_lake.jpg" },
-  { id: "default-cloudy", dataUrl: "/backgrounds/cloudy_seaside.jpg" },
-  { id: "default-autumn", dataUrl: "/backgrounds/autumn.jpg" },
-  { id: "default-winter", dataUrl: "/backgrounds/winter.jpg" },
-  { id: "default-after-rain", dataUrl: "/backgrounds/after_rain.jpg" },
+  { id: "default-night", dataUrl: PRESET_BACKGROUNDS.night },
+  { id: "default-mountain", dataUrl: PRESET_BACKGROUNDS.mountain },
+  { id: "default-forest", dataUrl: PRESET_BACKGROUNDS.forest },
+  { id: "default-foggy", dataUrl: PRESET_BACKGROUNDS.foggy },
+  { id: "default-cloudy", dataUrl: PRESET_BACKGROUNDS.cloudy },
+  { id: "default-autumn", dataUrl: PRESET_BACKGROUNDS.autumn },
+  { id: "default-winter", dataUrl: PRESET_BACKGROUNDS.winter },
+  { id: "default-after-rain", dataUrl: PRESET_BACKGROUNDS.afterRain },
 ];
 
 export default function Uploader() {

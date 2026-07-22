@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { detectInputLanguage, type InputLanguage } from "@/lib/language";
+import { detectExplicitWeatherIntent } from "@/lib/weatherIntent";
 import { useWeatherStore } from "@/store/useWeatherStore";
 
 const UI_COPY = {
@@ -42,6 +43,7 @@ export default function ThoughtInput() {
   const cloudInteractState = useWeatherStore((state) => state.cloudInteractState);
   const setTargetWeather = useWeatherStore((state) => state.setTargetWeather);
   const setCloudInteractState = useWeatherStore((state) => state.setCloudInteractState);
+  const setBgImage = useWeatherStore((state) => state.setBgImage);
   const beginWeatherRequest = useWeatherStore((state) => state.beginWeatherRequest);
   const endWeatherRequest = useWeatherStore((state) => state.endWeatherRequest);
 
@@ -64,6 +66,12 @@ export default function ThoughtInput() {
     if (!trimmed || isSending) return;
 
     const isModification = useWeatherStore.getState().cloudInteractState === "input";
+    const explicitIntent = !isModification ? detectExplicitWeatherIntent(trimmed) : null;
+
+    if (explicitIntent) {
+      void setBgImage(explicitIntent.backgroundUrl);
+    }
+
     const language = detectInputLanguage(trimmed);
     setSendingLanguage(language);
     setIsSending(true);

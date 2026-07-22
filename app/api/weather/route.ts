@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { mapApiResponseToWeatherState } from "@/lib/weather";
+import { detectExplicitWeatherIntent } from "@/lib/weatherIntent";
 import { detectInputLanguage, type InputLanguage } from "@/lib/language";
 
 const client = new OpenAI({
@@ -128,6 +129,7 @@ export async function POST(request: NextRequest) {
   }
 
   const language = detectInputLanguage(text);
+  const explicitIntent = detectExplicitWeatherIntent(text);
   const languageReminder =
     language === "en"
       ? "The user wrote in English. Respond only in English for cloudSpeech and rippleSpeeches."
@@ -165,7 +167,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(buildGracefulFallback());
     }
 
-    const weather = mapApiResponseToWeatherState(parsed);
+    const weather = mapApiResponseToWeatherState(
+      explicitIntent
+        ? { ...(parsed as Record<string, unknown>), weather: explicitIntent.weather }
+        : parsed,
+    );
     return NextResponse.json(weather);
   } catch (error) {
     console.error("[Weather API Error]:", error);
